@@ -3831,7 +3831,9 @@ mod tests {
 
         initialize_db(&conn).expect("migrate legacy schema");
 
-        let summaries = list_chat_history_sync(&conn).expect("list migrated legacy history");
+        let summaries = list_chat_history_sync(&conn, 1, 20).expect("list migrated legacy history");
+        assert_eq!(summaries.total_count, 1);
+        let summaries = summaries.items;
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, "legacy-conv");
         assert_eq!(summaries[0].session_id, None);
@@ -3902,7 +3904,10 @@ mod tests {
             );
         }
 
-        let summaries = list_chat_history_sync(&legacy).expect("list minimal migrated history");
+        let summaries =
+            list_chat_history_sync(&legacy, 1, 20).expect("list minimal migrated history");
+        assert_eq!(summaries.total_count, 1);
+        let summaries = summaries.items;
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].title, "Untitled");
         assert_eq!(summaries[0].message_count, 0);
