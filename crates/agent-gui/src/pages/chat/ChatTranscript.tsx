@@ -85,11 +85,11 @@ function writeUploadedImagePreviewCache(cacheKey: string, value: string) {
 }
 
 function resolveNearestScrollViewport(element: HTMLElement | null) {
-  return element?.closest("[data-radix-scroll-area-viewport]") as HTMLDivElement | null;
+  return element?.closest("[data-scroll-viewport]") as HTMLDivElement | null;
 }
 
 function resolveScrollAreaViewport(root: HTMLDivElement | null) {
-  return root?.querySelector("[data-radix-scroll-area-viewport]") as HTMLDivElement | null;
+  return root?.querySelector("[data-scroll-viewport]") as HTMLDivElement | null;
 }
 
 async function loadUploadedImagePreview(params: {

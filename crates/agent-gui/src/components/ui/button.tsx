@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../../lib/shared/utils";
@@ -35,20 +34,31 @@ const buttonVariants = cva(
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean;
+    render?: React.ReactElement;
   };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+  ({ className, variant, size, render: renderProp, children, ...props }, ref) => {
+    const mergedClass = cn(buttonVariants({ variant, size }), className);
+
+    if (renderProp) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rp = renderProp as React.ReactElement<any>;
+      return React.cloneElement(rp, {
+        className: cn(mergedClass, rp.props.className),
+        ...props,
+        children: children ?? rp.props.children,
+      });
+    }
+
     return (
-      <Comp
-        className={cn(buttonVariants({ variant, size }), className)}
-        ref={ref}
-        {...props}
-      />
+      <button ref={ref} className={mergedClass} {...props}>
+        {children}
+      </button>
     );
   },
 );
 
 Button.displayName = "Button";
+
+export { buttonVariants };

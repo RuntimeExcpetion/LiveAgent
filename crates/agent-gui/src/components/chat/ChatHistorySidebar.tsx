@@ -277,26 +277,32 @@ const HistoryRow = memo(function HistoryRow(props: {
             ) : null}
 
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  title="更多操作"
-                  aria-label="更多操作"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  className={cn(
-                    "h-8 w-8 shrink-0 rounded-xl text-muted-foreground opacity-0 pointer-events-none transition-[opacity,colors]",
-                    "hover:bg-muted/70 hover:text-foreground",
-                    "group-hover/item:opacity-100 group-hover/item:pointer-events-auto",
-                    "group-focus-within/item:opacity-100 group-focus-within/item:pointer-events-auto",
-                    menuOpen && "bg-muted/70 text-foreground",
-                    menuOpen && "opacity-100 pointer-events-auto",
-                  )}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    title="更多操作"
+                    aria-label="更多操作"
+                    onPointerDown={(e: React.PointerEvent<HTMLButtonElement>) =>
+                      e.stopPropagation()
+                    }
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) =>
+                      e.stopPropagation()
+                    }
+                    className={cn(
+                      "h-8 w-8 shrink-0 rounded-xl text-muted-foreground opacity-0 pointer-events-none transition-[opacity,colors]",
+                      "hover:bg-muted/70 hover:text-foreground",
+                      "group-hover/item:opacity-100 group-hover/item:pointer-events-auto",
+                      "group-focus-within/item:opacity-100 group-focus-within/item:pointer-events-auto",
+                      menuOpen && "bg-muted/70 text-foreground",
+                      menuOpen && "opacity-100 pointer-events-auto",
+                    )}
+                  />
+                }
+              >
+                <MoreHorizontal className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 side="right"

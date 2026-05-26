@@ -112,31 +112,33 @@ export const ChatHeader = memo(function ChatHeader(props: {
         ) : null}
 
         <DropdownMenu open={isModelMenuOpen} onOpenChange={setIsModelMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              disabled={!hasModels}
-              className={cn(
-                "model-selector-trigger h-9 max-w-[min(20rem,calc(100vw-8.5rem))] justify-between gap-1.5 overflow-hidden rounded-lg px-3 text-base font-semibold text-foreground transition-all duration-200 ease-out hover:bg-muted/60 dark:text-white",
-                isModelMenuOpen && "bg-muted/70 shadow-sm",
-              )}
-            >
-              <span className="model-selector-current-label flex min-w-0 items-center gap-1.5 text-left">
-                {selectedOption ? (
-                  <ProviderBrandIcon
-                    type={selectedOption.providerType}
-                    className="opacity-80"
-                  />
-                ) : null}
-                <span className="min-w-0 truncate">{currentModelLabel}</span>
-              </span>
-              <ChevronDown
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                disabled={!hasModels}
                 className={cn(
-                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out dark:text-white",
-                  isModelMenuOpen && "rotate-180",
+                  "model-selector-trigger h-9 max-w-[min(20rem,calc(100vw-8.5rem))] justify-between gap-1.5 overflow-hidden rounded-lg px-3 text-base font-semibold text-foreground transition-all duration-200 ease-out hover:bg-muted/60 dark:text-white",
+                  isModelMenuOpen && "bg-muted/70 shadow-sm",
                 )}
               />
-            </Button>
+            }
+          >
+            <span className="model-selector-current-label flex min-w-0 items-center gap-1.5 text-left">
+              {selectedOption ? (
+                <ProviderBrandIcon
+                  type={selectedOption.providerType}
+                  className="opacity-80"
+                />
+              ) : null}
+              <span className="min-w-0 truncate">{currentModelLabel}</span>
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out dark:text-white",
+                isModelMenuOpen && "rotate-180",
+              )}
+            />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
@@ -148,7 +150,7 @@ export const ChatHeader = memo(function ChatHeader(props: {
               {t("chat.selectModel")}
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="my-0 bg-border/40" />
-            <div className="max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overscroll-contain px-1 pb-1">
+            <div className="max-h-[min(24rem,var(--available-height,24rem))] overflow-y-auto overscroll-contain px-1 pb-1">
               {(() => {
                 let animationIndex = 0;
                 return groups.map((group, groupIndex) => (

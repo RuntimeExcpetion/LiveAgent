@@ -1185,12 +1185,10 @@ function McpRegistryPreviewDrawer(props: {
               variant="outline"
               size="sm"
               className="h-9 flex-1 gap-1.5 rounded-xl border-border/50 bg-background/70"
-              asChild
+              render={<a href={primaryLink} target="_blank" rel="noreferrer" />}
             >
-              <a href={primaryLink} target="_blank" rel="noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" />
-                {t("mcpHub.storeOpenExternal")}
-              </a>
+              <ExternalLink className="h-3.5 w-3.5" />
+              {t("mcpHub.storeOpenExternal")}
             </Button>
           ) : null}
           <Button
