@@ -53,6 +53,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Tag,
+  Target,
   Trash2,
   Upload,
   X,
@@ -1759,16 +1760,179 @@ function graphCircleColor(row: GraphRow) {
   return graphColor(lane?.color ?? row.commitColor);
 }
 
-function orderedCommitRefs(refs: readonly string[]) {
-  const orderedRefs: string[] = [];
-  const seenRefs = new Set<string>();
-  for (const rawRef of refs) {
-    const ref = rawRef.trim();
-    if (!ref || seenRefs.has(ref)) continue;
-    seenRefs.add(ref);
-    orderedRefs.push(ref);
+type CommitRefKind = "head" | "branch" | "remote" | "tag" | "ref";
+
+type CommitRefTagInfo = {
+  label: string;
+  kind: CommitRefKind;
+  title: string;
+  order: number;
+  index: number;
+};
+
+type CommitRefTagOptions = {
+  remoteName?: string;
+};
+
+const COMMIT_REF_KIND_ORDER: Record<CommitRefKind, number> = {
+  head: 0,
+  branch: 1,
+  remote: 2,
+  tag: 3,
+  ref: 4,
+};
+
+const COMMIT_REF_KIND_TITLE: Record<CommitRefKind, string> = {
+  head: "HEAD",
+  branch: "Branch",
+  remote: "Remote branch",
+  tag: "Tag",
+  ref: "Ref",
+};
+
+function normalizeRefRemoteName(remoteName: string | undefined) {
+  return remoteName?.trim().replace(/^refs\/remotes\//, "").replace(/\/HEAD$/, "") ?? "";
+}
+
+function isLikelyRemoteRefLabel(ref: string, remoteName: string | undefined) {
+  const remote = normalizeRefRemoteName(remoteName);
+  if (remote && ref.startsWith(`${remote}/`)) return true;
+  return /^(origin|upstream)\//.test(ref);
+}
+
+function commitRefTagInfo(rawRef: string, index: number, options: CommitRefTagOptions) {
+  const raw = rawRef.trim();
+  if (!raw) return null;
+
+  let ref = raw;
+  let isHead = false;
+  let isTag = false;
+
+  if (ref.startsWith("HEAD -> ")) {
+    isHead = true;
+    ref = ref.slice("HEAD -> ".length).trim();
   }
-  return orderedRefs;
+
+  if (ref.startsWith("tag: ")) {
+    isTag = true;
+    ref = ref.slice("tag: ".length).trim();
+  }
+
+  if (!ref || ref === "HEAD" || ref.endsWith("/HEAD")) return null;
+
+  let kind: CommitRefKind = "ref";
+  let label = ref;
+  if (ref.startsWith("refs/heads/")) {
+    kind = "branch";
+    label = ref.slice("refs/heads/".length);
+  } else if (ref.startsWith("refs/remotes/")) {
+    kind = "remote";
+    label = ref.slice("refs/remotes/".length);
+  } else if (ref.startsWith("refs/tags/")) {
+    kind = "tag";
+    label = ref.slice("refs/tags/".length);
+  } else if (isTag) {
+    kind = "tag";
+  } else if (isLikelyRemoteRefLabel(ref, options.remoteName)) {
+    kind = "remote";
+  } else {
+    kind = "branch";
+  }
+
+  if (!label) return null;
+  const resolvedKind = isHead ? "head" : kind;
+  return {
+    label,
+    kind: resolvedKind,
+    title: `${COMMIT_REF_KIND_TITLE[resolvedKind]}: ${label}`,
+    order: COMMIT_REF_KIND_ORDER[resolvedKind],
+    index,
+  } satisfies CommitRefTagInfo;
+}
+
+function orderedCommitRefTags(refs: readonly string[], options: CommitRefTagOptions = {}) {
+  const orderedRefs: CommitRefTagInfo[] = [];
+  const seenRefs = new Set<string>();
+  refs.forEach((rawRef, index) => {
+    const ref = commitRefTagInfo(rawRef, index, options);
+    if (!ref) return;
+    const key = `${ref.kind}\x00${ref.label}`;
+    if (seenRefs.has(key)) return;
+    seenRefs.add(key);
+    orderedRefs.push(ref);
+  });
+  return orderedRefs.sort((left, right) => {
+    if (left.order !== right.order) return left.order - right.order;
+    return left.index - right.index;
+  });
+}
+
+function orderedCommitRefs(refs: readonly string[], options: CommitRefTagOptions = {}) {
+  return orderedCommitRefTags(refs, options).map((ref) => ref.label);
+}
+
+function commitRefChipClass(kind: CommitRefKind, selected: boolean) {
+  const baseClass =
+    "inline-flex h-5 min-w-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold leading-[14px] shadow-sm ring-1 ring-inset";
+
+  if (selected) {
+    return cn(
+      baseClass,
+      "border-accent-foreground/35 bg-accent-foreground/15 text-accent-foreground ring-accent-foreground/20",
+    );
+  }
+
+  switch (kind) {
+    case "head":
+      return cn(
+        baseClass,
+        "border-emerald-300/60 bg-emerald-50 text-emerald-700 ring-emerald-200/70 dark:border-emerald-300/35 dark:bg-emerald-950/45 dark:text-emerald-200 dark:ring-emerald-300/15",
+      );
+    case "remote":
+      return cn(
+        baseClass,
+        "border-blue-300/60 bg-blue-50 text-blue-700 ring-blue-200/70 dark:border-blue-300/35 dark:bg-blue-950/45 dark:text-blue-200 dark:ring-blue-300/15",
+      );
+    case "tag":
+      return cn(
+        baseClass,
+        "border-amber-300/60 bg-amber-50 text-amber-700 ring-amber-200/70 dark:border-amber-300/35 dark:bg-amber-950/45 dark:text-amber-200 dark:ring-amber-300/15",
+      );
+    case "branch":
+      return cn(
+        baseClass,
+        "border-sky-300/60 bg-sky-50 text-sky-700 ring-sky-200/70 dark:border-sky-300/35 dark:bg-sky-950/45 dark:text-sky-200 dark:ring-sky-300/15",
+      );
+    case "ref":
+    default:
+      return cn(
+        baseClass,
+        "border-border/70 bg-muted/50 text-muted-foreground ring-border/60",
+      );
+  }
+}
+
+function CommitRefTagIcon({
+  kind,
+  variant,
+}: {
+  kind: CommitRefKind;
+  variant: "list" | "detail";
+}) {
+  const className = cn("shrink-0 opacity-85", variant === "detail" ? "h-3 w-3" : "h-2.5 w-2.5");
+  switch (kind) {
+    case "head":
+      return <Target className={className} aria-hidden="true" />;
+    case "branch":
+      return <GitBranch className={className} aria-hidden="true" />;
+    case "remote":
+      return <Cloud className={className} aria-hidden="true" />;
+    case "tag":
+      return <Tag className={className} aria-hidden="true" />;
+    case "ref":
+    default:
+      return <GitCommitHorizontal className={className} aria-hidden="true" />;
+  }
 }
 
 function commitHistoryTitle(commit: GitCommitSummary) {
@@ -1806,25 +1970,21 @@ function gitHistoryGraphStateFromResponse(response: GitLogResponse): GitHistoryG
 function CommitRefTags({
   refs,
   selected,
+  remoteName,
   variant = "list",
   limit = COMMIT_REF_TAG_LIMIT,
 }: {
   refs: readonly string[];
   selected: boolean;
+  remoteName?: string;
   variant?: "list" | "detail";
   limit?: number;
 }) {
-  const orderedRefs = orderedCommitRefs(refs);
+  const orderedRefs = orderedCommitRefTags(refs, { remoteName });
   if (orderedRefs.length === 0) return null;
 
   const visibleRefs = orderedRefs.slice(0, Math.max(0, limit));
   const hiddenCount = orderedRefs.length - visibleRefs.length;
-  const chipClass = cn(
-    "inline-flex h-5 min-w-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold leading-[14px] shadow-sm ring-1 ring-inset",
-    selected
-      ? "border-accent-foreground/35 bg-accent-foreground/15 text-accent-foreground ring-accent-foreground/20"
-      : "border-sky-300/60 bg-sky-50 text-sky-700 ring-sky-200/70 dark:border-sky-300/35 dark:bg-sky-950/45 dark:text-sky-200 dark:ring-sky-300/15",
-  );
 
   return (
     <span
@@ -1833,22 +1993,26 @@ function CommitRefTags({
           ? "mt-1.5 flex min-w-0 flex-wrap items-center gap-1 overflow-visible"
           : "mt-0.5 flex max-w-[52%] shrink-0 items-center justify-end gap-1 overflow-x-hidden overflow-y-visible"
       }
-      title={orderedRefs.join(", ")}
+      title={orderedRefs.map((ref) => ref.title).join(", ")}
     >
       {visibleRefs.map((ref) => (
         <span
-          key={ref}
+          key={`${ref.kind}:${ref.label}`}
+          title={ref.title}
+          aria-label={ref.title}
           className={cn(
-            chipClass,
+            commitRefChipClass(ref.kind, selected),
             variant === "detail" ? "max-w-[12rem] shrink-0" : "max-w-[8.5rem] shrink",
           )}
         >
-          <Tag className={cn("shrink-0 opacity-85", variant === "detail" ? "h-3 w-3" : "h-2.5 w-2.5")} />
-          <span className="truncate leading-[14px]">{ref}</span>
+          <CommitRefTagIcon kind={ref.kind} variant={variant} />
+          <span className="truncate leading-[14px]">{ref.label}</span>
         </span>
       ))}
       {hiddenCount > 0 ? (
-        <span className={cn(chipClass, "shrink-0 px-1.5 leading-[14px]")}>
+        <span
+          className={cn(commitRefChipClass("ref", selected), "shrink-0 px-1.5 leading-[14px]")}
+        >
           +{hiddenCount}
         </span>
       ) : null}
@@ -2252,12 +2416,12 @@ function commitContextRefName(
   commit: GitCommitSummary,
   state: Pick<GitRepositoryState, "remoteName">,
 ) {
-  const refs = orderedCommitRefs(commit.refs);
-  const remotePrefix = state.remoteName ? `${state.remoteName}/` : "";
+  const refs = orderedCommitRefTags(commit.refs, { remoteName: state.remoteName });
   return (
-    (remotePrefix ? refs.find((ref) => ref.startsWith(remotePrefix)) : "") ||
-    refs.find((ref) => ref.includes("/")) ||
-    refs[0] ||
+    refs.find((ref) => ref.kind === "remote")?.label ||
+    refs.find((ref) => ref.kind === "head")?.label ||
+    refs.find((ref) => ref.kind === "branch")?.label ||
+    refs[0]?.label ||
     commit.shortSha ||
     commit.sha.slice(0, 7)
   );
@@ -3466,6 +3630,30 @@ export const GitReviewPanel = memo(function GitReviewPanel(props: GitReviewPanel
       return `file:${row.commit.sha}:${row.file.status}:${row.file.oldPath ?? ""}:${row.file.path}`;
     },
   });
+  const currentHistoryItemIndex = useMemo(() => {
+    const selectedIndex = selectedCommitSha
+      ? historyRows.findIndex((row) => row.type === "commit" && row.commit.sha === selectedCommitSha)
+      : -1;
+    if (selectedIndex >= 0) return selectedIndex;
+
+    const headIndex = historyRows.findIndex(
+      (row) => row.type === "commit" && gitGraph.rows[row.graphIndex]?.isHead,
+    );
+    if (headIndex >= 0) return headIndex;
+
+    return historyRows.findIndex((row) => row.type === "commit");
+  }, [gitGraph.rows, historyRows, selectedCommitSha]);
+  const revealCurrentHistoryItem = useCallback(() => {
+    if (currentHistoryItemIndex < 0) return;
+    setHistoryContextMenu(null);
+    if (!useSplitReviewLayout) {
+      setHistoryStackedDir("back");
+      setHistoryStackedPane("list");
+    }
+    window.requestAnimationFrame(() => {
+      historyVirtualizer.scrollToIndex(currentHistoryItemIndex, { align: "center" });
+    });
+  }, [currentHistoryItemIndex, historyVirtualizer, useSplitReviewLayout]);
 
   useEffect(() => {
     if (reviewMode !== "history") {
@@ -4491,6 +4679,16 @@ export const GitReviewPanel = memo(function GitReviewPanel(props: GitReviewPanel
                 <History className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">{t("projectTools.gitReview.commitHistoryTitle")}</span>
               </div>
+              <button
+                type="button"
+                aria-label={t("projectTools.gitReview.revealCurrentHistoryItem")}
+                title={t("projectTools.gitReview.revealCurrentHistoryItem")}
+                className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+                disabled={currentHistoryItemIndex < 0}
+                onClick={revealCurrentHistoryItem}
+              >
+                <Target className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
             </div>
             <div
               ref={historyListRef}
@@ -4664,7 +4862,11 @@ export const GitReviewPanel = memo(function GitReviewPanel(props: GitReviewPanel
                           <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
                             {commit.subject || commit.shortSha}
                           </span>
-                          <CommitRefTags refs={commit.refs} selected={commitSelected} />
+                          <CommitRefTags
+                            refs={commit.refs}
+                            selected={commitSelected}
+                            remoteName={state.remoteName}
+                          />
                         </button>
                       </div>
                     );
@@ -4692,6 +4894,7 @@ export const GitReviewPanel = memo(function GitReviewPanel(props: GitReviewPanel
                     <CommitRefTags
                       refs={selectedCommit.refs}
                       selected={false}
+                      remoteName={state.remoteName}
                       variant="detail"
                       limit={COMMIT_DETAIL_REF_TAG_LIMIT}
                     />

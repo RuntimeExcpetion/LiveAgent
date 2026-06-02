@@ -59,6 +59,12 @@ function cloneLane(lane: GraphLane): GraphLane {
 function normalizeRef(value: string) {
   let ref = value.trim();
   if (!ref) return "";
+  if (ref.startsWith("HEAD -> ")) {
+    ref = ref.slice("HEAD -> ".length).trim();
+  }
+  if (ref.startsWith("tag: ")) {
+    ref = ref.slice("tag: ".length).trim();
+  }
   if (ref.startsWith("refs/heads/")) {
     ref = ref.slice("refs/heads/".length);
   } else if (ref.startsWith("refs/remotes/")) {

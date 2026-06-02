@@ -1266,22 +1266,26 @@ fn clean_git_ref_label(raw: &str) -> Option<String> {
     if value.is_empty() {
         return None;
     }
-    if let Some((_, target)) = value.split_once(" -> ") {
+    let mut is_head = false;
+    let mut is_tag = false;
+    if let Some((head, target)) = value.split_once(" -> ") {
+        is_head = head.trim() == "HEAD";
         value = target.trim();
     }
     if let Some(stripped) = value.strip_prefix("tag: ") {
+        is_tag = true;
         value = stripped.trim();
-    }
-    for prefix in ["refs/heads/", "refs/remotes/", "refs/tags/"] {
-        if let Some(stripped) = value.strip_prefix(prefix) {
-            value = stripped;
-            break;
-        }
     }
     if value.is_empty() || value == "HEAD" || value.ends_with("/HEAD") {
         return None;
     }
-    Some(value.to_string())
+    if is_head {
+        Some(format!("HEAD -> {value}"))
+    } else if is_tag && !value.starts_with("refs/tags/") {
+        Some(format!("refs/tags/{value}"))
+    } else {
+        Some(value.to_string())
+    }
 }
 
 fn parse_git_refs(raw: &str) -> Vec<String> {
@@ -2596,12 +2600,19 @@ mod tests {
 
     #[test]
     fn parses_git_log_commits_refs_and_renames() {
-        let raw = "\x1e0123456789abcdef\x1f0123456\x1ffedcba9\x1fHEAD -> refs/heads/feature, refs/remotes/origin/feature\x1fAlice\x1falice@example.com\x1f2026-05-29T10:11:12+08:00\x1frename file\nR100\0old\tname.txt\0new name.txt\0A\0src/tab\tfile.txt\0";
+        let raw = "\x1e0123456789abcdef\x1f0123456\x1ffedcba9\x1fHEAD -> refs/heads/feature, refs/remotes/origin/feature, tag: refs/tags/v1.2.3\x1fAlice\x1falice@example.com\x1f2026-05-29T10:11:12+08:00\x1frename file\nR100\0old\tname.txt\0new name.txt\0A\0src/tab\tfile.txt\0";
         let commits = parse_git_log(raw);
         assert_eq!(commits.len(), 1);
         let commit = &commits[0];
         assert_eq!(commit.short_sha, "0123456");
-        assert_eq!(commit.refs, vec!["feature", "origin/feature"]);
+        assert_eq!(
+            commit.refs,
+            vec![
+                "HEAD -> refs/heads/feature",
+                "refs/remotes/origin/feature",
+                "refs/tags/v1.2.3",
+            ]
+        );
         assert_eq!(commit.parents, vec!["fedcba9"]);
         assert_eq!(commit.files.len(), 2);
         assert_eq!(commit.files[0].status, "R");
