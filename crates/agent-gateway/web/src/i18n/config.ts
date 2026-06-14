@@ -861,10 +861,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.createFolderFailed": "新建文件夹失败",
     "settings.workdirWarning": "Agent 模式需要先选择项目，否则无法执行文件工具。",
     "settings.workdirOpenFailed": "打开目录选择器失败：",
-    "settings.systemTools": "自定义系统工具",
+    "settings.systemTools": "系统工具",
     "settings.systemToolsDesc":
-      "这里仅展示用户自定义的系统工具；选中的工具会在 Agent 模式下注册，供模型在对话中调用。",
-    "settings.noSystemTools": "暂无可用的自定义系统工具",
+      "这里展示可选的系统内置工具与自定义系统工具；选中的工具会在 Agent 模式下注册，供模型在对话中调用。",
+    "settings.noSystemTools": "暂无可用的系统工具",
 
     /* ── Settings Providers ── */
     "settings.addProvider": "新增供应商",
@@ -2302,10 +2302,10 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.createFolderFailed": "Failed to create folder",
     "settings.workdirWarning": "Agent mode requires selecting a project before file tools can run.",
     "settings.workdirOpenFailed": "Failed to open directory picker: ",
-    "settings.systemTools": "Custom System Tools",
+    "settings.systemTools": "System Tools",
     "settings.systemToolsDesc":
-      "Only user-defined system tools are shown here. Selected tools are registered in Agent mode and can be called by the model during conversation.",
-    "settings.noSystemTools": "No custom system tools available",
+      "Optional built-in and custom system tools are shown here. Selected tools are registered in Agent mode and can be called by the model during conversation.",
+    "settings.noSystemTools": "No system tools available",
 
     /* ── Settings Providers ── */
     "settings.addProvider": "Add Provider",

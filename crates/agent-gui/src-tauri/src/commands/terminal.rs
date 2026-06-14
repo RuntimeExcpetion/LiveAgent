@@ -7,7 +7,7 @@ use crate::runtime::terminal::{
     terminal_shell_options as runtime_terminal_shell_options, TerminalListResponse,
     TerminalReadTailResponse, TerminalSessionRecord, TerminalSessionRegistry,
     TerminalShellOptionsResponse, TerminalSnapshotResponse, TerminalSshCreateResponse,
-    TerminalSshLatencyResponse,
+    TerminalSshExecResponse, TerminalSshLatencyResponse,
 };
 
 #[tauri::command(rename_all = "snake_case")]
@@ -90,6 +90,22 @@ pub async fn terminal_ssh_latency(
     session_id: String,
 ) -> Result<TerminalSshLatencyResponse, String> {
     registry.ssh_latency(session_id).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn terminal_ssh_exec(
+    registry: State<'_, Arc<TerminalSessionRegistry>>,
+    session_id: String,
+    command: String,
+    cwd: Option<String>,
+    timeout_ms: Option<u64>,
+    max_bytes: Option<usize>,
+) -> Result<TerminalSshExecResponse, String> {
+    registry
+        .inner()
+        .clone()
+        .ssh_exec(session_id, command, cwd, timeout_ms, max_bytes)
+        .await
 }
 
 #[tauri::command(rename_all = "snake_case")]

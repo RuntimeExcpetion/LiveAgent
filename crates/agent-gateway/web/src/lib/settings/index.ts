@@ -1,8 +1,8 @@
 import { DEFAULT_LOCALE, normalizeLocale, type Locale } from "../../i18n/config";
 import { mergeAlwaysEnabledSkillNames } from "../skills/builtin";
 import { normalizeApiKey, normalizeBaseUrl, normalizeModels } from "./normalize";
-import { CUSTOM_SYSTEM_TOOL_OPTIONS, type SystemToolId } from "../tools/customSystemTools";
-export type { SystemToolId } from "../tools/customSystemTools";
+import { SYSTEM_TOOL_OPTIONS, type SystemToolId } from "../tools/systemToolOptions";
+export type { SystemToolId } from "../tools/systemToolOptions";
 
 export type ProviderId = "codex" | "claude_code" | "gemini";
 
@@ -1032,7 +1032,7 @@ function normalizeMcpTransport(input: unknown): McpTransport {
 }
 
 export function normalizeSystemToolSelection(input: unknown): SystemToolId[] {
-  const valid = new Set<SystemToolId>(CUSTOM_SYSTEM_TOOL_OPTIONS.map((tool) => tool.id));
+  const valid = new Set<SystemToolId>(SYSTEM_TOOL_OPTIONS.map((tool) => tool.id));
   const out: SystemToolId[] = [];
 
   for (const item of normalizeStringArray(input)) {

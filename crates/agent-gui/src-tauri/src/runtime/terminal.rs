@@ -42,6 +42,10 @@ const SSH_STATUS_CONNECTED: &str = "connected";
 const SSH_STATUS_RECONNECTING: &str = "reconnecting";
 const SSH_STATUS_DISCONNECTED: &str = "disconnected";
 pub const TERMINAL_EVENT_NAME: &str = "terminal:event";
+const SSH_EXEC_DEFAULT_MAX_BYTES: usize = 64 * 1024;
+const SSH_EXEC_MAX_BYTES: usize = 256 * 1024;
+const SSH_EXEC_DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+const SSH_EXEC_MAX_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -128,6 +132,25 @@ pub struct TerminalSshCreateResponse {
 pub struct TerminalSshLatencyResponse {
     pub session_id: String,
     pub latency_ms: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSshExecResponse {
+    pub session_id: String,
+    pub command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_signal: Option<String>,
+    pub stdout: String,
+    pub stderr: String,
+    pub stdout_truncated: bool,
+    pub stderr_truncated: bool,
+    pub timed_out: bool,
+    pub duration_ms: u128,
 }
 
 #[derive(Debug, Clone)]
@@ -1237,6 +1260,81 @@ impl TerminalSessionRegistry {
         })
     }
 
+    pub async fn ssh_exec(
+        self: &Arc<Self>,
+        session_id: String,
+        command: String,
+        cwd: Option<String>,
+        timeout_ms: Option<u64>,
+        max_bytes: Option<usize>,
+    ) -> Result<TerminalSshExecResponse, String> {
+        let command = command.trim().to_string();
+        if command.is_empty() {
+            return Err("command is required".to_string());
+        }
+        let entry = self.entry(&session_id)?;
+        let record = entry
+            .record
+            .lock()
+            .map_err(|_| "terminal session lock poisoned".to_string())?
+            .clone();
+        if record.kind.trim() != "ssh" {
+            return Err("terminal session is not an SSH connection".to_string());
+        }
+        if !record.running {
+            return Err("SSH connection is not running".to_string());
+        }
+        let TerminalSessionBackend::Ssh { runtime } = &entry.backend else {
+            return Err("terminal session is not an SSH connection".to_string());
+        };
+
+        let cwd = cwd
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let wrapped_command = wrap_ssh_exec_command(&command, cwd.as_deref());
+        let timeout_duration = normalize_ssh_exec_timeout(timeout_ms);
+        let capture_limit = normalize_ssh_exec_max_bytes(max_bytes);
+        let start = Instant::now();
+        let result = timeout(
+            timeout_duration,
+            run_ssh_exec_channel(runtime, wrapped_command, capture_limit),
+        )
+        .await;
+        let duration_ms = start.elapsed().as_millis();
+
+        match result {
+            Ok(Ok(mut response)) => {
+                response.session_id = record.id;
+                response.command = command;
+                response.cwd = cwd;
+                response.duration_ms = duration_ms;
+                Ok(response)
+            }
+            Ok(Err(error)) => {
+                spawn_ssh_reconnect_runner(
+                    Arc::clone(self),
+                    record.id,
+                    Arc::clone(runtime),
+                    runtime.current_connection_id(),
+                );
+                Err(format!("SSH exec failed: {error}"))
+            }
+            Err(_) => Ok(TerminalSshExecResponse {
+                session_id: record.id,
+                command,
+                cwd,
+                exit_code: None,
+                exit_signal: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                stdout_truncated: false,
+                stderr_truncated: false,
+                timed_out: true,
+                duration_ms,
+            }),
+        }
+    }
+
     pub fn input(&self, session_id: String, data: String) -> Result<TerminalSessionRecord, String> {
         if data.is_empty() {
             return self.record(session_id);
@@ -2008,6 +2106,110 @@ pub(crate) async fn open_sftp_connection_for_host(
         _handle: handle,
         session,
     })
+}
+
+async fn run_ssh_exec_channel(
+    runtime: &Arc<SshSessionRuntime>,
+    command: String,
+    max_bytes: usize,
+) -> Result<TerminalSshExecResponse, String> {
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut stdout_truncated = false;
+    let mut stderr_truncated = false;
+    let mut exit_code = None;
+    let mut exit_signal = None;
+
+    let channel = {
+        let handle = runtime.handle.lock().await;
+        let Some(handle) = handle.as_ref() else {
+            return Err("SSH connection is not connected".to_string());
+        };
+        handle
+            .channel_open_session()
+            .await
+            .map_err(|error| format!("SSH exec channel open failed: {error}"))?
+    };
+    channel
+        .exec(true, command.into_bytes())
+        .await
+        .map_err(|error| format!("SSH exec request failed: {error}"))?;
+    let (mut read_half, _write_half) = channel.split();
+
+    loop {
+        match read_half.wait().await {
+            Some(ChannelMsg::Data { data }) => {
+                append_limited(&mut stdout, data.as_ref(), max_bytes, &mut stdout_truncated);
+            }
+            Some(ChannelMsg::ExtendedData { data, .. }) => {
+                append_limited(&mut stderr, data.as_ref(), max_bytes, &mut stderr_truncated);
+            }
+            Some(ChannelMsg::ExitStatus { exit_status }) => {
+                exit_code = Some(exit_status);
+            }
+            Some(ChannelMsg::ExitSignal { signal_name, .. }) => {
+                exit_signal = Some(format!("{signal_name:?}"));
+            }
+            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+            _ => {}
+        }
+    }
+
+    Ok(TerminalSshExecResponse {
+        session_id: String::new(),
+        command: String::new(),
+        cwd: None,
+        exit_code,
+        exit_signal,
+        stdout: String::from_utf8_lossy(&stdout).to_string(),
+        stderr: String::from_utf8_lossy(&stderr).to_string(),
+        stdout_truncated,
+        stderr_truncated,
+        timed_out: false,
+        duration_ms: 0,
+    })
+}
+
+fn normalize_ssh_exec_timeout(timeout_ms: Option<u64>) -> Duration {
+    let requested = timeout_ms
+        .filter(|value| *value > 0)
+        .map(Duration::from_millis)
+        .unwrap_or(SSH_EXEC_DEFAULT_TIMEOUT);
+    requested.clamp(Duration::from_secs(1), SSH_EXEC_MAX_TIMEOUT)
+}
+
+fn normalize_ssh_exec_max_bytes(max_bytes: Option<usize>) -> usize {
+    max_bytes
+        .filter(|value| *value > 0)
+        .unwrap_or(SSH_EXEC_DEFAULT_MAX_BYTES)
+        .clamp(4 * 1024, SSH_EXEC_MAX_BYTES)
+}
+
+fn append_limited(buffer: &mut Vec<u8>, data: &[u8], max_bytes: usize, truncated: &mut bool) {
+    if buffer.len() >= max_bytes {
+        if !data.is_empty() {
+            *truncated = true;
+        }
+        return;
+    }
+    let remaining = max_bytes - buffer.len();
+    if data.len() > remaining {
+        buffer.extend_from_slice(&data[..remaining]);
+        *truncated = true;
+    } else {
+        buffer.extend_from_slice(data);
+    }
+}
+
+fn wrap_ssh_exec_command(command: &str, cwd: Option<&str>) -> String {
+    match cwd.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(cwd) => format!("cd {} && {}", shell_single_quote(cwd), command),
+        None => command.to_string(),
+    }
+}
+
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 async fn run_ssh_session_io(

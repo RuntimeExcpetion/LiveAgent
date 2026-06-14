@@ -2657,6 +2657,8 @@ export function ChatPage(props: ChatPageProps) {
       overrides?.selectedSystemToolIdsOverride ??
       gatewayBridgeRequest?.selectedSystemToolIdsOverride ??
       settings.system.selectedSystemTools;
+    const effectiveProjectPathKey = workspaceProjectPathKey(effectiveWorkdir);
+    const effectiveAssociatedSshHostIds = getSshProjectHostIds(settings.ssh, effectiveProjectPathKey);
     const effectiveIsAgentDevExecutionMode = isAgentDevMode(effectiveExecutionMode);
     const effectiveSkillsEnabled = settings.skills.enabled && effectiveIsAgentMode;
     const hasRemoteGatewayTarget =
@@ -3625,6 +3627,10 @@ export function ChatPage(props: ChatPageProps) {
           selectableMcpServers,
           remoteWebTunnelsEnabled: settings.remote.enableWebTunnels,
           remoteGatewayOnline: canShareHistory,
+          sshHosts: settings.ssh.hosts,
+          associatedSshHostIds: effectiveAssociatedSshHostIds,
+          sshManagerRemoteAllowed:
+            !gatewayBridgeRequest || settings.remote.enableWebSshTerminal === true,
           onTunnelsChanged: (change) => {
             setTunnelRefreshToken((current) => current + 1);
             if (change.action === "create") {

@@ -53,6 +53,7 @@ import { assistantMessageToText } from "../../lib/providers/llm";
 import {
   type AppSettings,
   type ProviderId,
+  type SshHostConfig,
   type SystemToolId,
   workspaceProjectPathKey,
 } from "../../lib/settings";
@@ -288,6 +289,9 @@ type RunAgentConversationTurnParams = {
   remoteWebTunnelsEnabled?: boolean;
   remoteGatewayOnline?: boolean;
   onTunnelsChanged?: (change: TunnelManagerChange) => void;
+  sshHosts?: SshHostConfig[];
+  associatedSshHostIds?: string[];
+  sshManagerRemoteAllowed?: boolean;
   sessionId: string;
   conversationId: string;
   conversationCwd?: string;
@@ -372,6 +376,9 @@ export async function runAgentConversationTurn(params: RunAgentConversationTurnP
     remoteWebTunnelsEnabled,
     remoteGatewayOnline,
     onTunnelsChanged,
+    sshHosts,
+    associatedSshHostIds,
+    sshManagerRemoteAllowed,
     sessionId,
     conversationId,
     conversationCwd,
@@ -492,6 +499,9 @@ export async function runAgentConversationTurn(params: RunAgentConversationTurnP
     remoteWebTunnelsEnabled,
     remoteGatewayOnline,
     tunnelProjectPathKey: workspaceProjectPathKey(effectiveWorkdir),
+    sshHosts,
+    associatedSshHostIds,
+    sshManagerRemoteAllowed,
     onTunnelsChanged: (change) => {
       onTunnelsChanged?.(change);
       if (typeof window !== "undefined") {
