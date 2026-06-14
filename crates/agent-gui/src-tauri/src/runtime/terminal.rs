@@ -307,6 +307,16 @@ enum SshSessionInput {
     Resize(u32, u32),
 }
 
+enum SshSessionIoEndReason {
+    Shutdown,
+    InputClosed,
+    WriteFailed,
+    RemoteClosed,
+    RemoteExitStatus(u32),
+    RemoteExitSignal(String),
+    ConnectionLost,
+}
+
 #[derive(Debug, Clone)]
 struct PendingSshConnectRequest {
     cwd: String,
@@ -1244,24 +1254,8 @@ impl TerminalSessionRegistry {
         .await;
         match ping {
             Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                spawn_ssh_reconnect_runner(
-                    Arc::clone(self),
-                    record.id.clone(),
-                    Arc::clone(runtime),
-                    runtime.current_connection_id(),
-                );
-                return Err(format!("SSH latency check failed: {error}"));
-            }
-            Err(_) => {
-                spawn_ssh_reconnect_runner(
-                    Arc::clone(self),
-                    record.id.clone(),
-                    Arc::clone(runtime),
-                    runtime.current_connection_id(),
-                );
-                return Err("SSH latency check timed out".to_string());
-            }
+            Ok(Err(error)) => return Err(format!("SSH latency check failed: {error}")),
+            Err(_) => return Err("SSH latency check timed out".to_string()),
         }
         let elapsed = start.elapsed().as_millis().clamp(1, u128::from(u32::MAX)) as u32;
         Ok(TerminalSshLatencyResponse {
@@ -1714,6 +1708,25 @@ impl TerminalSessionRegistry {
             }
         }
         self.broadcast("exit", entry, None, None, None);
+    }
+
+    async fn mark_ssh_shell_ended(
+        self: Arc<Self>,
+        session_id: String,
+        runtime: Arc<SshSessionRuntime>,
+        connection_id: usize,
+        message: String,
+    ) {
+        if runtime.current_connection_id() != connection_id || runtime.is_closing() {
+            return;
+        }
+        runtime.clear_connection_if_current(connection_id).await;
+        if message.trim().len() > 0 {
+            self.append_output(&session_id, message);
+        }
+        if let Ok(entry) = self.entry(&session_id) {
+            self.mark_ssh_disconnected(&entry);
+        }
     }
 
     fn broadcast(
@@ -2234,26 +2247,29 @@ async fn run_ssh_session_io(
     let (mut read_half, write_half) = channel.split();
     let mut writer = write_half.make_writer();
     let mut decoder = TerminalUtf8Decoder::default();
-    loop {
+    let mut remote_exit_reason: Option<SshSessionIoEndReason> = None;
+    let end_reason = loop {
         tokio::select! {
             _ = shutdown_rx.recv() => {
                 let handle = runtime.handle.lock().await;
                 if let Some(handle) = handle.as_ref() {
                     let _ = handle.disconnect(russh::Disconnect::ByApplication, "User disconnected", "en").await;
                 }
-                break;
+                break SshSessionIoEndReason::Shutdown;
             }
             input = input_rx.recv() => {
                 match input {
                     Some(SshSessionInput::Data(data)) => {
                         if writer.write_all(&data).await.is_err() {
-                            break;
+                            break SshSessionIoEndReason::WriteFailed;
                         }
                     }
                     Some(SshSessionInput::Resize(cols, rows)) => {
                         let _ = write_half.window_change(cols, rows, 0, 0).await;
                     }
-                    None => break,
+                    None => {
+                        break SshSessionIoEndReason::InputClosed;
+                    },
                 }
             }
             message = read_half.wait() => {
@@ -2264,20 +2280,106 @@ async fn run_ssh_session_io(
                             registry.append_output(&session_id, text);
                         }
                     }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
-                        break;
+                    Some(ChannelMsg::ExitStatus { exit_status }) => {
+                        remote_exit_reason = Some(SshSessionIoEndReason::RemoteExitStatus(exit_status));
+                    }
+                    Some(ChannelMsg::ExitSignal { signal_name, .. }) => {
+                        remote_exit_reason = Some(SshSessionIoEndReason::RemoteExitSignal(format!("{signal_name:?}")));
+                    }
+                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => {
+                        break remote_exit_reason.unwrap_or(SshSessionIoEndReason::RemoteClosed);
+                    }
+                    None => {
+                        break remote_exit_reason.unwrap_or(SshSessionIoEndReason::ConnectionLost);
                     }
                     _ => {}
                 }
             }
         }
-    }
+    };
 
     let text = decoder.finish();
     if !text.is_empty() {
         registry.append_output(&session_id, text);
     }
-    spawn_ssh_reconnect_runner(registry, session_id, runtime, connection_id);
+    finish_ssh_session_io(registry, session_id, runtime, connection_id, end_reason).await;
+}
+
+async fn finish_ssh_session_io(
+    registry: Arc<TerminalSessionRegistry>,
+    session_id: String,
+    runtime: Arc<SshSessionRuntime>,
+    connection_id: usize,
+    end_reason: SshSessionIoEndReason,
+) {
+    if runtime.is_closing() {
+        return;
+    }
+    match end_reason {
+        SshSessionIoEndReason::Shutdown | SshSessionIoEndReason::InputClosed => {}
+        SshSessionIoEndReason::RemoteExitStatus(status) => {
+            registry
+                .mark_ssh_shell_ended(
+                    session_id,
+                    runtime,
+                    connection_id,
+                    format!("\r\n[SSH] Remote shell exited with status {status}.\r\n"),
+                )
+                .await;
+        }
+        SshSessionIoEndReason::RemoteExitSignal(signal) => {
+            registry
+                .mark_ssh_shell_ended(
+                    session_id,
+                    runtime,
+                    connection_id,
+                    format!("\r\n[SSH] Remote shell exited after signal {signal}.\r\n"),
+                )
+                .await;
+        }
+        SshSessionIoEndReason::RemoteClosed => {
+            registry
+                .mark_ssh_shell_ended(
+                    session_id,
+                    runtime,
+                    connection_id,
+                    "\r\n[SSH] Remote shell closed.\r\n".to_string(),
+                )
+                .await;
+        }
+        SshSessionIoEndReason::ConnectionLost => {
+            if ssh_connection_alive(&runtime, connection_id).await {
+                registry
+                    .mark_ssh_shell_ended(
+                        session_id,
+                        runtime,
+                        connection_id,
+                        "\r\n[SSH] Remote shell closed.\r\n".to_string(),
+                    )
+                    .await;
+            } else {
+                spawn_ssh_reconnect_runner(registry, session_id, runtime, connection_id);
+            }
+        }
+        SshSessionIoEndReason::WriteFailed => {
+            spawn_ssh_reconnect_runner(registry, session_id, runtime, connection_id);
+        }
+    }
+}
+
+async fn ssh_connection_alive(runtime: &Arc<SshSessionRuntime>, connection_id: usize) -> bool {
+    if runtime.current_connection_id() != connection_id || runtime.is_closing() {
+        return false;
+    }
+    let ping = timeout(Duration::from_secs(2), async {
+        let handle = runtime.handle.lock().await;
+        let Some(handle) = handle.as_ref() else {
+            return Err(russh::Error::Disconnect);
+        };
+        handle.send_ping().await
+    })
+    .await;
+    matches!(ping, Ok(Ok(())))
 }
 
 fn spawn_ssh_reconnect_runner(
