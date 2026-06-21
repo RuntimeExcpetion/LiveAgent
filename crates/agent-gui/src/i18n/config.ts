@@ -992,8 +992,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.agentsNamePlaceholder": "例如：代码审查助手",
     "settings.agentsDescription": "描述",
     "settings.agentsDescriptionPlaceholder": "简要说明这个全局提示词模板的用途",
-    "settings.agentsTags": "标签",
-    "settings.agentsTagsPlaceholder": "例如：代码审查, 写作, 全局提示",
     "settings.agentsPrompt": "Prompt",
     "settings.agentsPromptPlaceholder": "输入完整的全局提示词内容...",
     "settings.agentsCount": "个模板",
@@ -1001,10 +999,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.agentsActiveLabel": "激活中",
     "settings.agentsNoTemplates": "还没有配置任何全局提示词模板",
     "settings.agentsNoTemplatesHint": "创建全局提示词模板，在对话中快速复用常见的 Agent 指令",
-    "settings.agentsNoDescription": "暂无描述",
-    "settings.agentsNoTags": "无标签",
     "settings.agentsShowPrompt": "查看 Prompt",
-    "settings.agentsHidePrompt": "收起 Prompt",
     "settings.agentsReady": "可以保存",
     "settings.agentsRequired": "名称和 Prompt 为必填项",
 
@@ -2495,8 +2490,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.agentsDescription": "Description",
     "settings.agentsDescriptionPlaceholder":
       "Briefly describe what this global prompt template is for",
-    "settings.agentsTags": "Tags",
-    "settings.agentsTagsPlaceholder": "e.g. review, writing, global prompt",
     "settings.agentsPrompt": "Prompt",
     "settings.agentsPromptPlaceholder": "Enter the full global prompt content...",
     "settings.agentsCount": "templates",
@@ -2505,10 +2498,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.agentsNoTemplates": "No global prompt templates yet",
     "settings.agentsNoTemplatesHint":
       "Create reusable prompt templates to quickly apply common Agent instructions in your chats",
-    "settings.agentsNoDescription": "No description",
-    "settings.agentsNoTags": "No tags",
     "settings.agentsShowPrompt": "View Prompt",
-    "settings.agentsHidePrompt": "Hide Prompt",
     "settings.agentsReady": "Ready to save",
     "settings.agentsRequired": "Name and Prompt are required",
 
