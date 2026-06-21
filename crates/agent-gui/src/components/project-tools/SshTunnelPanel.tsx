@@ -47,6 +47,7 @@ type PendingSshCreate = {
 };
 
 type SshTunnelPanelProps = {
+  active: boolean;
   cwd: string;
   projectPathKey: string;
   hosts: SshHostConfig[];
@@ -55,6 +56,7 @@ type SshTunnelPanelProps = {
   sessions: TerminalSession[];
   onSessionSnapshot: (snapshot: TerminalSnapshot) => void;
   onSessionClosed: (sessionId: string) => void;
+  onSshSessionsReconcile: (sessions: TerminalSession[]) => void;
   onOpenSession: (session: TerminalSession, kind?: "bash" | "sftp") => void;
   onAssociatedHostIdsChange: (hostIds: string[]) => void;
 };
@@ -141,6 +143,15 @@ function sshStatusLabel(session: TerminalSession, t: (key: string) => string) {
   return t("projectTools.sshTunnelConnected");
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isTerminalSessionNotFoundError(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  return message.includes("terminal session not found") || message.includes("session not found");
+}
+
 function HostMetaTags(props: { host: SshHostConfig }) {
   const { host } = props;
   const { t } = useLocale();
@@ -176,6 +187,7 @@ function HostMetaTags(props: { host: SshHostConfig }) {
 
 export function SshTunnelPanel(props: SshTunnelPanelProps) {
   const {
+    active,
     cwd,
     projectPathKey,
     hosts,
@@ -184,6 +196,7 @@ export function SshTunnelPanel(props: SshTunnelPanelProps) {
     sessions,
     onSessionSnapshot,
     onSessionClosed,
+    onSshSessionsReconcile,
     onOpenSession,
     onAssociatedHostIdsChange,
   } = props;
@@ -204,6 +217,8 @@ export function SshTunnelPanel(props: SshTunnelPanelProps) {
   const [latencyBySessionId, setLatencyBySessionId] = useState<Record<string, SshLatencyState>>({});
   const latencyRequestsRef = useRef<Set<string>>(new Set());
   const pendingCreateRef = useRef<PendingSshCreate | null>(null);
+  const onSshSessionsReconcileRef = useRef(onSshSessionsReconcile);
+  onSshSessionsReconcileRef.current = onSshSessionsReconcile;
   const associatedSet = useMemo(() => new Set(associatedHostIds), [associatedHostIds]);
   const associatedHosts = useMemo(
     () => hosts.filter((host) => associatedSet.has(host.id)),
@@ -232,6 +247,34 @@ export function SshTunnelPanel(props: SshTunnelPanelProps) {
     if (canCreateInScope || view !== "create") return;
     setView("list");
   }, [canCreateInScope, view]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    let inFlight = false;
+    const reconcileSshSessions = () => {
+      if (inFlight) return;
+      inFlight = true;
+      void client
+        .list()
+        .then((nextSessions) => {
+          if (cancelled) return;
+          onSshSessionsReconcileRef.current(
+            nextSessions.filter((session) => session.kind === "ssh" && session.ssh),
+          );
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+    reconcileSshSessions();
+    const timer = window.setInterval(reconcileSshSessions, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [active, client]);
 
   const refreshSessionLatency = useCallback(
     (session: TerminalSession) => {
@@ -437,7 +480,13 @@ export function SshTunnelPanel(props: SshTunnelPanelProps) {
       void client
         .close(session.id, session.projectPathKey)
         .then(() => onSessionClosed(session.id))
-        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+        .catch((err) => {
+          if (isTerminalSessionNotFoundError(err)) {
+            onSessionClosed(session.id);
+            return;
+          }
+          setError(errorMessage(err));
+        })
         .finally(() => setClosingSessionId((current) => (current === session.id ? "" : current)));
     },
     [client, closingSessionId, onSessionClosed, requestCloseSessionConfirm, t],

@@ -63,6 +63,7 @@ type RightDockContentProps = {
   onInsertGitFileMention?: (file: GitFileContextPayload) => void;
   onSessionSnapshot: (snapshot: TerminalSnapshot) => void;
   onSessionClosed: (sessionId: string) => void;
+  onSshSessionsReconcile: (sessions: TerminalSession[]) => void;
   onOpenSshSession?: (session: TerminalSession, kind?: "bash" | "sftp") => void;
   onSshProjectHostIdsChange?: (hostIds: string[]) => void;
   onTerminalError: (error: string | null) => void;
@@ -109,6 +110,7 @@ export function RightDockContent(props: RightDockContentProps) {
     onInsertGitFileMention,
     onSessionSnapshot,
     onSessionClosed,
+    onSshSessionsReconcile,
     onOpenSshSession,
     onSshProjectHostIdsChange,
     onTerminalError,
@@ -182,6 +184,7 @@ export function RightDockContent(props: RightDockContentProps) {
           )}
         >
           <SshTunnelPanel
+            active={currentActiveTab === "sshTunnel"}
             cwd={cwd}
             projectPathKey={projectPathKey}
             hosts={sshHosts}
@@ -190,6 +193,7 @@ export function RightDockContent(props: RightDockContentProps) {
             sessions={sshSessions}
             onSessionSnapshot={onSessionSnapshot}
             onSessionClosed={onSessionClosed}
+            onSshSessionsReconcile={onSshSessionsReconcile}
             onOpenSession={(session, kind) => onOpenSshSession?.(session, kind)}
             onAssociatedHostIdsChange={(hostIds) => {
               onSshProjectHostIdsChange?.(hostIds);
@@ -270,4 +274,3 @@ export function RightDockContent(props: RightDockContentProps) {
     </>
   );
 }
-

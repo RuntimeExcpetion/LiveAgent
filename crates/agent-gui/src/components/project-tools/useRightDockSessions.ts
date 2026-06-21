@@ -296,6 +296,30 @@ export function useRightDockSessions(options: UseRightDockSessionsOptions) {
     [onSessionsChange],
   );
 
+  const reconcileSshSessions = useCallback(
+    (nextSshSessions: TerminalSession[]) => {
+      const normalizedSshSessions = nextSshSessions.filter(
+        (session) => session.kind === "ssh" && session.id,
+      );
+      setSessions((current) => {
+        const nextSshSessionIds = new Set(normalizedSshSessions.map((session) => session.id));
+        const next = sortSessions([
+          ...current.filter((session) => session.kind !== "ssh"),
+          ...normalizedSshSessions,
+        ]);
+        if (areSessionsEqual(current, next)) return current;
+        for (const session of current) {
+          if (session.kind === "ssh" && !nextSshSessionIds.has(session.id)) {
+            initialTerminalSnapshotsRef.current.delete(session.id);
+          }
+        }
+        onSessionsChange?.(next);
+        return next;
+      });
+    },
+    [onSessionsChange],
+  );
+
   const forgetTerminalSession = useCallback(
     (sessionId: string) => {
       initialTerminalSnapshotsRef.current.delete(sessionId);
@@ -394,6 +418,7 @@ export function useRightDockSessions(options: UseRightDockSessionsOptions) {
     localSessions,
     pendingCloseSession,
     pendingCloseSessionId,
+    reconcileSshSessions,
     rememberTerminalSnapshot,
     setError,
     shellOptions,

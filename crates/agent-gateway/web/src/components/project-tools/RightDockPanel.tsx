@@ -137,6 +137,7 @@ export function RightDockPanel(props: RightDockPanelProps) {
     localSessions,
     pendingCloseSession,
     pendingCloseSessionId,
+    reconcileSshSessions,
     rememberTerminalSnapshot,
     setError,
     shellOptions,
@@ -437,6 +438,7 @@ export function RightDockPanel(props: RightDockPanelProps) {
                 onInsertGitFileMention={onInsertGitFileMention}
                 onSessionSnapshot={rememberTerminalSnapshot}
                 onSessionClosed={forgetTerminalSession}
+                onSshSessionsReconcile={reconcileSshSessions}
                 onOpenSshSession={onOpenSshSession}
                 onSshProjectHostIdsChange={onSshProjectHostIdsChange}
                 onTerminalError={setError}
