@@ -34,6 +34,7 @@ import {
   ToolSurface,
   ToolSurfaceLabel,
 } from "./ToolResultDisplay";
+import { EditDiffView } from "./EditDiffView";
 
 function getToolDisplay(toolCall: { name: string; arguments?: Record<string, unknown> }) {
   const args = toolCall.arguments || {};
@@ -273,18 +274,28 @@ function ToolArgsDisplay({ item }: { item: ToolTraceItem }) {
               : []),
           ]}
         />
-        <StreamingTextPreviewSurface
-          label="old string"
-          hasValue={editPreview.hasOldString}
-          emptyLabel="(empty old string)"
-          preview={editPreview.oldString}
-        />
-        <StreamingTextPreviewSurface
-          label="new string"
-          hasValue={editPreview.hasNewString}
-          emptyLabel="(empty replacement)"
-          preview={editPreview.newString}
-        />
+        {editPreview.hasOldString && editPreview.hasNewString ? (
+          <EditDiffView
+            beforeText={editPreview.oldString.text}
+            afterText={editPreview.newString.text}
+            filePath={editPreview.path}
+          />
+        ) : (
+          <>
+            <StreamingTextPreviewSurface
+              label="old string"
+              hasValue={editPreview.hasOldString}
+              emptyLabel="(empty old string)"
+              preview={editPreview.oldString}
+            />
+            <StreamingTextPreviewSurface
+              label="new string"
+              hasValue={editPreview.hasNewString}
+              emptyLabel="(empty replacement)"
+              preview={editPreview.newString}
+            />
+          </>
+        )}
       </div>
     );
   }

@@ -1,3 +1,5 @@
+import { generateDiffFile } from "@git-diff-view/file";
+import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ImageContent, ToolResultMessage, Usage } from "../../lib/agentTypes";
 import {
@@ -61,6 +63,7 @@ import type {
   SubagentMessageResultDetails,
   WriteResultDetails,
 } from "../../lib/tools/builtinTypes";
+import "@git-diff-view/react/styles/diff-view.css";
 
 export function AssistantAvatar(props: { className?: string }) {
   const { className } = props;
@@ -1181,18 +1184,28 @@ function ToolArgsDisplay({ item }: { item: ToolTraceItem }) {
               : []),
           ]}
         />
-        <StreamingTextPreviewSurface
-          label="old string"
-          hasValue={editPreview.hasOldString}
-          emptyLabel="(empty old string)"
-          preview={editPreview.oldString}
-        />
-        <StreamingTextPreviewSurface
-          label="new string"
-          hasValue={editPreview.hasNewString}
-          emptyLabel="(empty replacement)"
-          preview={editPreview.newString}
-        />
+        {editPreview.hasOldString && editPreview.hasNewString ? (
+          <EditDiffView
+            beforeText={editPreview.oldString.text}
+            afterText={editPreview.newString.text}
+            filePath={editPreview.path}
+          />
+        ) : (
+          <>
+            <StreamingTextPreviewSurface
+              label="old string"
+              hasValue={editPreview.hasOldString}
+              emptyLabel="(empty old string)"
+              preview={editPreview.oldString}
+            />
+            <StreamingTextPreviewSurface
+              label="new string"
+              hasValue={editPreview.hasNewString}
+              emptyLabel="(empty replacement)"
+              preview={editPreview.newString}
+            />
+          </>
+        )}
       </div>
     );
   }
@@ -1919,40 +1932,93 @@ function CodePreview(props: { text: string; maxChars?: number }) {
   );
 }
 
+function guessLangFromPath(filePath?: string): string {
+  if (!filePath) return "txt";
+  const ext = filePath.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    ts: "typescript",
+    tsx: "typescript",
+    js: "javascript",
+    jsx: "javascript",
+    py: "python",
+    rs: "rust",
+    go: "go",
+    java: "java",
+    kt: "kotlin",
+    rb: "ruby",
+    swift: "swift",
+    c: "c",
+    cpp: "cpp",
+    h: "c",
+    hpp: "cpp",
+    cs: "csharp",
+    css: "css",
+    scss: "scss",
+    html: "html",
+    vue: "vue",
+    json: "json",
+    yaml: "yaml",
+    yml: "yaml",
+    toml: "toml",
+    xml: "xml",
+    md: "markdown",
+    sql: "sql",
+    sh: "bash",
+    zsh: "bash",
+    bash: "bash",
+    dockerfile: "dockerfile",
+    lua: "lua",
+    php: "php",
+    dart: "dart",
+  };
+  return (ext && map[ext]) || "txt";
+}
+
+function useIsDark() {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
 function EditDiffView(props: { beforeText: string; afterText: string; filePath?: string }) {
   const { beforeText, afterText, filePath } = props;
-  const sections = useMemo(
-    () => [
-      { key: "before", label: "Before", text: beforeText, tone: "text-destructive" },
-      { key: "after", label: "After", text: afterText, tone: "text-emerald-600 dark:text-emerald-400" },
-    ],
-    [afterText, beforeText],
-  );
+  const isDark = useIsDark();
+  const lang = guessLangFromPath(filePath);
 
-  if (!beforeText && !afterText) return null;
+  const diffFile = useMemo(() => {
+    if (!beforeText && !afterText) return undefined;
+    const instance = generateDiffFile(
+      filePath ?? "old",
+      beforeText,
+      filePath ?? "new",
+      afterText,
+      lang,
+      lang,
+    );
+    instance.init();
+    instance.buildSplitDiffLines();
+    return instance;
+  }, [beforeText, afterText, filePath, lang]);
+
+  if (!diffFile) return null;
 
   return (
-    <div className="space-y-2">
-      {filePath ? (
-        <ToolSurface>
-          <MetaTags tags={[{ label: "path", value: filePath }]} />
-        </ToolSurface>
-      ) : null}
-      <div className="overflow-hidden rounded-[10px] border border-black/[0.06] shadow-sm dark:border-white/[0.08] dark:shadow-none">
-        {sections.map((section) => (
-          <div
-            key={section.key}
-            className="border-b border-black/[0.06] last:border-b-0 dark:border-white/[0.08]"
-          >
-            <div className={cn("px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]", section.tone)}>
-              {section.label}
-            </div>
-            <ToolScrollablePre className="max-h-64 rounded-none border-t border-black/[0.06] bg-black/[0.02] dark:border-white/[0.08] dark:bg-white/[0.03]">
-              {previewText(section.text, 8000)}
-            </ToolScrollablePre>
-          </div>
-        ))}
-      </div>
+    <div className="edit-tool-diff-view tool-text-scroll overflow-x-auto overflow-y-hidden rounded-[10px] border border-black/[0.06] bg-white/[0.58] shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04] dark:shadow-none">
+      <DiffView
+        diffFile={diffFile}
+        diffViewMode={DiffModeEnum.Unified}
+        diffViewTheme={isDark ? "dark" : "light"}
+        diffViewHighlight
+        diffViewAddWidget={false}
+        diffViewWrap={false}
+        diffViewFontSize={12}
+      />
     </div>
   );
 }
