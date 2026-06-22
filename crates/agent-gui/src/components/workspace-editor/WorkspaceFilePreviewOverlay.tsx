@@ -4,20 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { read, utils } from "xlsx";
 import { useLocale } from "../../i18n";
 import { cn } from "../../lib/shared/utils";
-import type { IconComponent } from "../icons";
+import { type FileTypeIconComponent, getFileTypeIcon } from "../chat/fileTypeIcons";
 import {
   AlertTriangle,
   ExternalLink,
-  FileText,
   FilePenLine,
-  FileTypeAudio,
-  FileTypeExcel,
-  FileTypeHtml,
-  FileTypeMarkdown,
-  FileTypePdf,
-  FileTypeVideo,
-  FileTypeWord,
-  ImageIcon,
+  FileText,
   Loader2,
   RefreshCw,
   X,
@@ -153,26 +145,26 @@ function hashString(value: string) {
   return Math.abs(hash).toString(36);
 }
 
-function getPreviewIcon(kind: WorkspacePreviewKind): IconComponent {
+function getPreviewIcon(kind: WorkspacePreviewKind): FileTypeIconComponent {
   switch (kind) {
     case "audio":
-      return FileTypeAudio;
+      return getFileTypeIcon("preview.mp3", "file");
     case "document":
-      return FileTypeWord;
+      return getFileTypeIcon("preview.docx", "file");
     case "html":
-      return FileTypeHtml;
+      return getFileTypeIcon("preview.html", "file");
     case "image":
-      return ImageIcon;
+      return getFileTypeIcon("preview.png", "file");
     case "markdown":
-      return FileTypeMarkdown;
+      return getFileTypeIcon("preview.md", "file");
     case "pdf":
-      return FileTypePdf;
+      return getFileTypeIcon("preview.pdf", "file");
     case "spreadsheet":
-      return FileTypeExcel;
+      return getFileTypeIcon("preview.xlsx", "file");
     case "video":
-      return FileTypeVideo;
+      return getFileTypeIcon("preview.mp4", "file");
     case "text":
-      return FileText;
+      return getFileTypeIcon("preview.txt", "file");
   }
 }
 

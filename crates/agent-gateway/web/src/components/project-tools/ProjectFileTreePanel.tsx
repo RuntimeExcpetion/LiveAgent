@@ -734,7 +734,7 @@ export function ProjectFileTreePanel(props: {
       if (!node) return null;
       const expanded = state.expanded.includes(path);
       const selected = state.selectedPath === path;
-      const TypeIcon = node.kind === "file" ? getFileTypeIcon(path, node.kind) : null;
+      const TypeIcon = getFileTypeIcon(path, node.kind, { expanded });
       return (
         <div key={path || "__root__"}>
           <div
@@ -783,15 +783,7 @@ export function ProjectFileTreePanel(props: {
                 onOpenFile?.(path);
               }}
             >
-              {node.kind === "dir" ? (
-                expanded ? (
-                  <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                ) : (
-                  <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                )
-              ) : TypeIcon ? (
-                <TypeIcon className="h-3.5 w-3.5 shrink-0" />
-              ) : null}
+              <TypeIcon className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 truncate">{node.name}</span>
             </button>
           </div>
@@ -950,8 +942,7 @@ export function ProjectFileTreePanel(props: {
             </div>
           ) : (
             searchResults.map((entry) => {
-              const TypeIcon =
-                entry.kind === "file" ? getFileTypeIcon(entry.path, entry.kind) : null;
+              const TypeIcon = getFileTypeIcon(entry.path, entry.kind);
               return (
                 <button
                   key={`${entry.kind}:${entry.path}`}
@@ -960,11 +951,7 @@ export function ProjectFileTreePanel(props: {
                   title={entry.path}
                   onClick={() => void revealPath(entry.path, entry.kind)}
                 >
-                  {entry.kind === "dir" ? (
-                    <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                  ) : TypeIcon ? (
-                    <TypeIcon className="h-3.5 w-3.5 shrink-0" />
-                  ) : null}
+                  <TypeIcon className="h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 truncate">{entry.path}</span>
                 </button>
               );
