@@ -1586,13 +1586,10 @@ export function pushChatEvent(
     return enrichTailHostedSearchEntriesWithText(next);
   }
 
-  if (event.type === "error" || event.type === "failed") {
-    const round = event.type === "error" ? readRound(event.round) : undefined;
+  if (event.type === "error") {
+    const round = readRound(event.round);
     const rawMessage = event.message ?? "";
-    const message = formatLiveErrorMessage(
-      rawMessage.trim() || "Request failed",
-      event.type === "failed",
-    );
+    const message = formatLiveErrorMessage(rawMessage.trim() || "Request failed", false);
     if (isAbortLikeError(message)) {
       return entries;
     }

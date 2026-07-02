@@ -58,59 +58,21 @@ export type ChatCheckpointPayload = {
   };
 };
 
-export type ChatRunControlState =
-  | "queued"
-  | "delivered"
-  | "claimed"
-  | "starting"
-  | "desktop_queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled";
-
-export type ChatControlEvent = {
-  type:
-    | "accepted"
-    | "user_message"
-    | "rebased"
-    | "projection_updated"
-    | "delivered"
-    | "claimed"
-    | "starting"
-    | "queued_in_gui"
-    | "started"
-    | "progress"
-    | "completed"
-    | "failed"
-    | "cancelled";
+export type ChatUserMessageEvent = {
+  type: "user_message";
   client_request_id?: string;
   conversation_id?: string;
-  run_epoch?: number;
-  state?: ChatRunControlState;
-  error_code?: string;
   message?: string;
   uploaded_files?: unknown;
   base_message_ref?: unknown;
   reason?: string;
-  seq?: number;
-  workdir?: string;
 };
 
-export type ChatRuntimeSnapshotEvent = {
-  type: "runtime_snapshot";
+export type ChatRebasedEvent = {
+  type: "rebased";
   conversation_id?: string;
-  run_id?: string;
-  client_request_id?: string;
-  worker_id?: string;
-  state?: ChatRunControlState;
-  updated_at?: number;
-  revision?: number;
-  entries_json?: string;
-  tool_status?: string | null;
-  tool_status_is_compaction?: boolean;
-  seq?: number;
-  workdir?: string;
+  base_message_ref?: unknown;
+  reason?: string;
 };
 
 export type ChatEvent = (
@@ -180,8 +142,8 @@ export type ChatEvent = (
       conversation_id?: string;
     }
   | { type: "error"; message: string; round?: number; conversation_id?: string }
-  | ChatRuntimeSnapshotEvent
-  | ChatControlEvent
+  | ChatUserMessageEvent
+  | ChatRebasedEvent
 ) & { seq?: number; workdir?: string };
 
 export type CronManagePayload = {

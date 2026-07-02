@@ -10,48 +10,6 @@ import (
 	gatewayv1 "github.com/liveagent/agent-gateway/internal/proto/v1"
 )
 
-// IsTerminalControl reports whether a control event carries a terminal run state.
-func IsTerminalControl(control *gatewayv1.ChatControlEvent) bool {
-	switch strings.TrimSpace(control.GetState()) {
-	case "completed", "failed", "cancelled":
-		return true
-	default:
-		return false
-	}
-}
-
-// ControlPayload shapes a ChatControlEvent into a wire payload.
-func ControlPayload(
-	control *gatewayv1.ChatControlEvent,
-	seq int64,
-	workdirInput ...string,
-) map[string]any {
-	payload := map[string]any{
-		"type":              strings.TrimSpace(control.GetType()),
-		"client_request_id": strings.TrimSpace(control.GetClientRequestId()),
-		"conversation_id":   strings.TrimSpace(control.GetConversationId()),
-		"run_epoch":         control.GetRunEpoch(),
-		"state":             strings.TrimSpace(control.GetState()),
-	}
-	if seq > 0 {
-		payload["seq"] = seq
-	} else if control.GetSeq() > 0 {
-		payload["seq"] = control.GetSeq()
-	}
-	if errorCode := strings.TrimSpace(control.GetErrorCode()); errorCode != "" {
-		payload["error_code"] = errorCode
-	}
-	if message := strings.TrimSpace(control.GetMessage()); message != "" {
-		payload["message"] = message
-	}
-	if len(workdirInput) > 0 {
-		if workdir := strings.TrimSpace(workdirInput[0]); workdir != "" {
-			payload["workdir"] = workdir
-		}
-	}
-	return payload
-}
-
 // EventPayload shapes a ChatEvent into a wire payload, decoding the JSON data
 // blob and trimming oversized tool content.
 func EventPayload(event *gatewayv1.ChatEvent, seq int64, workdirInput ...string) map[string]any {
