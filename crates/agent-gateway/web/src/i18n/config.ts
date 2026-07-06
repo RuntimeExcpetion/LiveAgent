@@ -1511,7 +1511,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     /* ── Chat Page ── */
     "chat.newConversation": "New Conversation",
     "chat.pendingTitle": "New Chat",
-    "chat.recentConversation": "Recent conversations",
+    "chat.recentConversation": "Conversations",
     "chat.workspaceSection": "Workspaces",
     "chat.workspaceCreate": "New workspace",
     "chat.workspaceNewConversation": "New conversation",

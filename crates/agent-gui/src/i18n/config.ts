@@ -1576,7 +1576,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "chat.memoryExtraction.noop": "No memory updates needed this turn.",
     "chat.memoryExtraction.partial":
       "Memory partially updated ({accepted} applied, {rejected} rejected).",
-    "chat.recentConversation": "Recent conversations",
+    "chat.recentConversation": "Conversations",
     "chat.workspaceSection": "Workspaces",
     "chat.workspaceCreate": "New workspace",
     "chat.workspaceNewConversation": "New conversation",
