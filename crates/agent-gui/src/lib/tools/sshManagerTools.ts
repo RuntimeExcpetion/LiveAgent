@@ -121,7 +121,7 @@ type ResolvedSshSession = {
 const SSH_MANAGER_TOOL: Tool = {
   name: "SSHManager",
   description:
-    'Manage SSH sessions and remote SFTP files for SSH hosts explicitly associated with the current project. Use host_id from list_hosts. If list_hosts reports credential=saved, LiveAgent already has the configured password/private key/passphrase; do not ask the user to paste credentials into chat, and call create_session, exec, or SFTP actions directly. If list_hosts reports credential=missing, ask the user to configure credentials in Settings > SSH instead of requesting secrets in chat. Default session strategy is reuse_or_create: exec and SFTP reuse the same running session for that host before LiveAgent creates a visible session. To intentionally run multiple SSH sessions, call create_session or set session_strategy="new", then use the returned session_id for follow-up operations. Use session_strategy="require_existing" when you want to fail instead of implicitly creating a session. Do not combine session_id with session_strategy="new". Authentication prompts, unknown host keys, changed host keys, and MFA must be completed by the user in the SSH Tunnel tab before retrying.',
+    'Manage SSH sessions and remote SFTP files for SSH hosts explicitly associated with the current project. Use host_id from list_hosts. If list_hosts reports credential=saved, LiveAgent already has the configured password/private key/passphrase; do not ask the user to paste credentials into chat, and call create_session, exec, or SFTP actions directly. If list_hosts reports credential=missing, ask the user to configure credentials in Settings > SSH instead of requesting secrets in chat. If list_hosts reports credential=interactive, the host uses keyboard-interactive login: creating a session requires the user to answer the server prompt in the SSH Tunnel tab; once a session is running, exec and SFTP reuse it normally. Default session strategy is reuse_or_create: exec and SFTP reuse the same running session for that host before LiveAgent creates a visible session. To intentionally run multiple SSH sessions, call create_session or set session_strategy="new", then use the returned session_id for follow-up operations. Use session_strategy="require_existing" when you want to fail instead of implicitly creating a session. Do not combine session_id with session_strategy="new". Authentication prompts, unknown host keys, changed host keys, and MFA must be completed by the user in the SSH Tunnel tab before retrying.',
   parameters: Type.Object({
     action: Type.Union(
       [
@@ -300,7 +300,7 @@ function normalizeSession(input: RawTerminalSession): SshManagerSessionSummary |
 }
 
 function hostCredentialConfigured(host: SshHostConfig) {
-  if (host.authType === "agent") return true;
+  if (host.authType === "keyboardInteractive") return true;
   if (host.authType === "privateKey") {
     return (
       host.privateKey.trim().length > 0 ||
@@ -322,7 +322,12 @@ function hostSummary(host: SshHostConfig) {
     port: host.port || 22,
     authType: host.authType,
     credentialConfigured,
-    credentialStatus: credentialConfigured ? "saved" : "missing",
+    credentialStatus:
+      host.authType === "keyboardInteractive"
+        ? "interactive"
+        : credentialConfigured
+          ? "saved"
+          : "missing",
   };
 }
 
@@ -580,6 +585,7 @@ async function executeSSHManager(
           ? [
               "Authorized SSH hosts:",
               "credential=saved means LiveAgent already has the configured SSH credential; use create_session directly and do not ask the user for that password/key.",
+              "credential=interactive means the host logs in via keyboard-interactive prompts: the user must create the session in the SSH Tunnel tab; a running session can be reused for exec and SFTP.",
               ...hosts.map(formatHostLine),
             ].join("\n")
           : "No authorized SSH hosts.",

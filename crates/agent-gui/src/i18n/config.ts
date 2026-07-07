@@ -1240,8 +1240,8 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.sshAuthPasswordHint": "保存用户名与密码",
     "settings.sshAuthPrivateKey": "私钥登录",
     "settings.sshAuthPrivateKeyHint": "导入私钥文件或直接粘贴内容",
-    "settings.sshAuthAgent": "SSH Agent",
-    "settings.sshAuthAgentHint": "使用本机已解锁的 SSH Agent",
+    "settings.sshAuthKeyboardInteractive": "键盘交互",
+    "settings.sshAuthKeyboardInteractiveHint": "连接时按服务器提示输入口令或验证码",
     "settings.sshPassword": "密码",
     "settings.sshPasswordPlaceholder": "输入 SSH 登录密码",
     "settings.sshPasswordConfigured": "密码已保存",
@@ -1254,7 +1254,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.sshPrivateKeyConfigured": "私钥已保存",
     "settings.sshPrivateKeyPassphrase": "私钥口令",
     "settings.sshPrivateKeyPassphraseConfigured": "私钥口令已保存",
-    "settings.sshAgentConfigured": "SSH Agent",
     "settings.sshKnownHostReset": "重置信任记录",
     "settings.sshKnownHostResetTitle": "重置 SSH 信任记录",
     "settings.sshKnownHostResetDesc":
@@ -2972,8 +2971,9 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.sshAuthPasswordHint": "Store username and password",
     "settings.sshAuthPrivateKey": "Private key",
     "settings.sshAuthPrivateKeyHint": "Import a key file or paste the key directly",
-    "settings.sshAuthAgent": "SSH Agent",
-    "settings.sshAuthAgentHint": "Use the local unlocked SSH agent",
+    "settings.sshAuthKeyboardInteractive": "Keyboard Interactive",
+    "settings.sshAuthKeyboardInteractiveHint":
+      "Answer server prompts (password/OTP) at connect time",
     "settings.sshPassword": "Password",
     "settings.sshPasswordPlaceholder": "Enter the SSH login password",
     "settings.sshPasswordConfigured": "Password saved",
@@ -2986,7 +2986,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     "settings.sshPrivateKeyConfigured": "Private key saved",
     "settings.sshPrivateKeyPassphrase": "Private key passphrase",
     "settings.sshPrivateKeyPassphraseConfigured": "Private key passphrase saved",
-    "settings.sshAgentConfigured": "SSH Agent",
     "settings.sshKnownHostReset": "Reset trust record",
     "settings.sshKnownHostResetTitle": "Reset SSH trust record",
     "settings.sshKnownHostResetDesc":
