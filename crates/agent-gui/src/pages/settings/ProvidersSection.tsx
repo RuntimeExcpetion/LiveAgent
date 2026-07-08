@@ -571,6 +571,12 @@ function CustomSettingsDrawer(props: SettingsSectionProps & { onClose: () => voi
   const selectedValue = conversationTitleModel
     ? toModelValue(conversationTitleModel.customProviderId, conversationTitleModel.model)
     : TITLE_MODEL_FOLLOW_CURRENT_VALUE;
+  const selectedOption = modelOptions.find((option) => option.value === selectedValue);
+  const selectedLabel = conversationTitleModel
+    ? selectedOption
+      ? `${selectedOption.providerName} / ${selectedOption.label}`
+      : conversationTitleModel.model
+    : t("settings.conversationTitleModelFollowCurrent");
 
   useEffect(
     () => () => {
@@ -663,7 +669,7 @@ function CustomSettingsDrawer(props: SettingsSectionProps & { onClose: () => voi
                 </Label>
                 <Select value={selectedValue} onValueChange={handleTitleModelChange}>
                   <SelectTrigger className="h-9 rounded-lg border-foreground/10 bg-white/70 shadow-sm dark:bg-background/40">
-                    <SelectValue />
+                    <SelectValue>{selectedLabel}</SelectValue>
                   </SelectTrigger>
                   <SelectContent className="max-h-72">
                     <SelectItem value={TITLE_MODEL_FOLLOW_CURRENT_VALUE}>
