@@ -808,7 +808,10 @@ export const ChatComposerBar = memo(function ChatComposerBar(props: {
                 >
                   <SelectTrigger
                     className={cn(
-                      "composer-reasoning-trigger group/reasoning h-8 w-auto shrink-0 gap-0.5 rounded-full border pl-2 pr-1.5 text-xs font-medium shadow-none outline-hidden transition-all duration-200 ease-out disabled:opacity-45 [&>svg:last-child]:h-3 [&>svg:last-child]:w-3 [&>svg:last-child]:opacity-50 [&>svg:last-child]:transition-transform [&>svg:last-child]:duration-200 [&[data-open]>svg:last-child]:rotate-180",
+                      // Base UI wraps the chevron in an Icon <span>, so the
+                      // svg is a descendant (not a direct child) of the
+                      // trigger; the open state lives on data-popup-open.
+                      "composer-reasoning-trigger group/reasoning h-8 w-auto shrink-0 gap-0.5 rounded-full border pl-2 pr-1.5 text-xs font-medium shadow-none outline-hidden transition-all duration-200 ease-out disabled:opacity-45 [&_svg:last-child]:h-3 [&_svg:last-child]:w-3 [&_svg:last-child]:opacity-50 [&_svg:last-child]:transition-transform [&_svg:last-child]:duration-200 [&[data-popup-open]_svg:last-child]:rotate-180",
                       chatRuntimeControls.thinkingEnabled
                         ? "border-violet-300/30 bg-violet-50/55 text-foreground hover:border-violet-300/45 hover:bg-violet-50/80 dark:border-violet-300/15 dark:bg-violet-400/[0.07] dark:text-foreground dark:hover:bg-violet-400/[0.13]"
                         : "border-transparent bg-foreground/4 text-muted-foreground hover:bg-foreground/[0.07] dark:bg-white/[0.04] dark:hover:bg-white/[0.08]",
@@ -840,7 +843,7 @@ export const ChatComposerBar = memo(function ChatComposerBar(props: {
                       <SelectItem
                         key={value}
                         value={value}
-                        className="composer-reasoning-item rounded-md transition-all duration-150 ease-out focus:translate-x-0.5 focus:bg-violet-50/70 focus:text-foreground data-[selected]:bg-violet-50/80 data-[selected]:font-medium dark:focus:bg-violet-400/[0.12] dark:data-[selected]:bg-violet-400/[0.14]"
+                        className="composer-reasoning-item rounded-md transition-all duration-150 ease-out data-[highlighted]:translate-x-0.5 data-[highlighted]:bg-violet-50/70 data-[highlighted]:text-foreground data-[selected]:bg-violet-50/80 data-[selected]:font-medium dark:data-[highlighted]:bg-violet-400/[0.12] dark:data-[selected]:bg-violet-400/[0.14]"
                         style={{ animationDelay: `${Math.min(index, 5) * 0.022}s` }}
                       >
                         {t(REASONING_I18N_KEYS[value])}

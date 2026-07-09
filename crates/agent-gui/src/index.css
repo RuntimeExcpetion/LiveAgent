@@ -1438,29 +1438,10 @@
     animation-delay: 0.12s;
   }
 
-  /* Composer reasoning select animations */
-  @keyframes composerReasoningDropdownIn {
-    from {
-      opacity: 0;
-      transform: translateY(6px) scale(0.97);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  @keyframes composerReasoningDropdownOut {
-    from {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(5px) scale(0.975);
-    }
-  }
-
+  /* Composer reasoning select / branch selector animations.
+   * Base UI drives both popups, so open styling keys off data-popup-open on
+   * the trigger and enter/exit key off data-starting-style / data-ending-style
+   * on the popup (data-state rules never match Base UI). */
   @keyframes composerReasoningItemIn {
     from {
       opacity: 0;
@@ -1472,30 +1453,39 @@
     }
   }
 
-  .composer-reasoning-trigger[data-state="open"] {
+  .composer-reasoning-trigger[data-popup-open] {
     box-shadow:
       0 8px 18px -14px rgba(88, 28, 135, 0.55),
       inset 0 0 0 1px rgba(167, 139, 250, 0.12);
   }
 
-  .composer-reasoning-dropdown[data-state="open"] {
-    animation: composerReasoningDropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-    transform-origin: var(--radix-select-content-transform-origin);
-    --tw-enter-opacity: initial;
-    --tw-enter-scale: initial;
-    --tw-enter-translate-y: initial;
+  .composer-reasoning-dropdown,
+  .composer-branch-dropdown {
+    transform-origin: var(--transform-origin);
+    transition:
+      opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .composer-reasoning-dropdown[data-state="closed"] {
-    animation: composerReasoningDropdownOut 0.12s cubic-bezier(0.4, 0, 1, 1);
-    transform-origin: var(--radix-select-content-transform-origin);
-    --tw-exit-opacity: initial;
-    --tw-exit-scale: initial;
-    --tw-exit-translate-y: initial;
+  .composer-reasoning-dropdown[data-starting-style],
+  .composer-reasoning-dropdown[data-ending-style],
+  .composer-branch-dropdown[data-starting-style],
+  .composer-branch-dropdown[data-ending-style] {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
   }
 
-  .composer-reasoning-dropdown[data-state="open"] .composer-reasoning-item {
-    animation: composerReasoningItemIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  .composer-reasoning-dropdown[data-ending-style],
+  .composer-branch-dropdown[data-ending-style] {
+    transition-duration: 0.12s;
+    transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+    transform: translateY(5px) scale(0.975);
+  }
+
+  /* `backwards` (not `both`): a filled forwards animation would keep holding
+   * transform after it ends and suppress the item highlight translate. */
+  .composer-reasoning-dropdown[data-open] .composer-reasoning-item {
+    animation: composerReasoningItemIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
 
   /* Chat header model selector: grow out of the trigger with a soft slide.
@@ -1550,13 +1540,16 @@
     .composer-dropdown [role="menuitem"],
     .composer-reasoning-dropdown,
     .composer-reasoning-item,
+    .composer-branch-dropdown,
     .model-selector-dropdown,
     .model-selector-item {
       animation: none !important;
     }
 
     .composer-reasoning-trigger,
-    .composer-reasoning-trigger > svg:last-child,
+    .composer-reasoning-trigger svg:last-child,
+    .composer-reasoning-dropdown,
+    .composer-branch-dropdown,
     .model-selector-dropdown,
     .model-selector-trigger,
     .model-selector-trigger svg {
