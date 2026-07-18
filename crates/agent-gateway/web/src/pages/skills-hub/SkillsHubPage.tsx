@@ -636,7 +636,6 @@ export function SkillsHubPage(props: SkillsHubPageProps) {
     importProgress,
     refresh,
     installedSkillNames,
-    isExternalSkillInstalled,
     showImportToast,
     t,
   ]);
@@ -1107,50 +1106,52 @@ export function SkillsHubPage(props: SkillsHubPageProps) {
     toggleBulkSelectionName(name);
   }
 
+  // 批量启用/禁用：作用于 bulkSelection，成功后清空选择并弹出 Undo。
+  // 副作用（Undo 快照/定时器/清空选择）都放在 setSettings 之外：
+  // 传给 setSettings 的 updater 必须是纯函数（StrictMode 会双调用）。
   const applyBulkEnableState = useCallback(
     (target: boolean) => {
       const names = [...bulkSelection].filter((name) => !isAlwaysEnabledSkillName(name));
       if (names.length === 0) return;
+
+      const before = settings.skills.selected;
+      const current = new Set(before);
+      const changed = names.filter((name) =>
+        target ? !current.has(name) : current.has(name),
+      ).length;
+      if (changed === 0) return;
+
+      clearBulkUndoTimer();
+      setBulkUndo({ selected: before, count: changed });
+      bulkUndoTimerRef.current = window.setTimeout(() => {
+        setBulkUndo(null);
+        bulkUndoTimerRef.current = null;
+      }, 6000);
+      setBulkSelection(new Set());
+      bulkAnchorRef.current = null;
       setSettings((prev) => {
-        const before = prev.skills.selected;
-        const next = new Set(before);
-        let changed = 0;
+        const next = new Set(prev.skills.selected);
         for (const name of names) {
-          if (target && !next.has(name)) {
-            next.add(name);
-            changed += 1;
-          } else if (!target && next.has(name)) {
-            next.delete(name);
-            changed += 1;
-          }
+          if (target) next.add(name);
+          else next.delete(name);
         }
-        if (changed === 0) return prev;
-        clearBulkUndoTimer();
-        setBulkUndo({ selected: before, count: changed });
-        bulkUndoTimerRef.current = window.setTimeout(() => {
-          setBulkUndo(null);
-          bulkUndoTimerRef.current = null;
-        }, 6000);
-        setBulkSelection(new Set());
-        bulkAnchorRef.current = null;
         return updateSkills(prev, {
           enabled: target ? true : prev.skills.enabled,
           selected: Array.from(next),
         });
       });
     },
-    [bulkSelection, clearBulkUndoTimer, setSettings],
+    [bulkSelection, clearBulkUndoTimer, setSettings, settings.skills.selected],
   );
 
   const undoBulkSelection = useCallback(() => {
     clearBulkUndoTimer();
-    setBulkUndo((current) => {
-      if (current) {
-        setSettings((prev) => updateSkills(prev, { selected: current.selected }));
-      }
-      return null;
-    });
-  }, [clearBulkUndoTimer, setSettings]);
+    if (bulkUndo) {
+      const restore = bulkUndo.selected;
+      setSettings((prev) => updateSkills(prev, { selected: restore }));
+    }
+    setBulkUndo(null);
+  }, [bulkUndo, clearBulkUndoTimer, setSettings]);
 
   async function deleteBulkSelectedInstalledSkills() {
     if (lockedByChatMode || deletingSkillName || !bulkMode) return;
@@ -1223,6 +1224,8 @@ export function SkillsHubPage(props: SkillsHubPageProps) {
 
   useEffect(() => clearBulkUndoTimer, [clearBulkUndoTimer]);
 
+  // 切换视图时退出批量模式并清空选择与锚点。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 只需在 view 变化时触发；exitBulkMode 是稳定回调
   useEffect(() => {
     exitBulkMode();
   }, [view]);
@@ -1247,10 +1250,10 @@ export function SkillsHubPage(props: SkillsHubPageProps) {
         ) {
           return;
         }
+        // 「全选当前筛选」只对已安装页有定义；其余视图保留浏览器默认 Ctrl+A。
+        if (view !== "installed") return;
         event.preventDefault();
-        if (view === "installed") {
-          setBulkSelectionRange(filteredSelectableInstalledNames, true);
-        }
+        setBulkSelectionRange(filteredSelectableInstalledNames, true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1296,10 +1299,15 @@ export function SkillsHubPage(props: SkillsHubPageProps) {
   );
   const bulkDeletePreview = useMemo(() => {
     const names = bulkDeleteNames.slice(0, 5);
-    const rest = Math.max(0, bulkDeleteNames.length - names.length);
     if (names.length === 0) return "";
-    return rest > 0 ? `${names.join("、")} 等 ${bulkDeleteNames.length} 个` : names.join("、");
-  }, [bulkDeleteNames]);
+    const rest = bulkDeleteNames.length - names.length;
+    const joined = names.join(", ");
+    return rest > 0
+      ? t("settings.skillsHubBulkDeleteMore")
+          .replace("{names}", joined)
+          .replace("{count}", String(rest))
+      : joined;
+  }, [bulkDeleteNames, t]);
 
   function openInstalledSkillPreview(skill: SkillSummary) {
     setPreviewInstalledSkill(skill);
@@ -2223,24 +2231,13 @@ function SkillsImportView(props: {
     }
   }, [scans, activeTool]);
   const activeScan = filteredScans.find((scan) => scan.tool === activeTool);
-  const visibleBaseDirs = useMemo(
-    () => activeScan?.skills.map((skill) => skill.baseDir) ?? [],
-    [activeScan],
-  );
+  // 「已选 X / Y」与全选按钮都只统计可导入项：已安装项不可选，不计入分子分母。
   const selectableVisibleBaseDirs = useMemo(
     () =>
       activeScan?.skills
         .filter((skill) => !installedNames.has(skill.name))
         .map((skill) => skill.baseDir) ?? [],
     [activeScan, installedNames],
-  );
-  const selectedVisibleCount = useMemo(
-    () =>
-      (activeScan?.skills ?? []).reduce((count, skill) => {
-        const lockedInstalled = installedNames.has(skill.name);
-        return count + (lockedInstalled || selected.has(skill.baseDir) ? 1 : 0);
-      }, 0),
-    [activeScan, installedNames, selected],
   );
   const selectedSelectableVisibleCount = useMemo(
     () =>
@@ -2415,6 +2412,13 @@ function SkillsImportView(props: {
               </div>
             </div>
 
+            {bulkMode ? (
+              <div className="hub-panel-enter flex items-center gap-2 text-[11px] text-muted-foreground/80">
+                <ListChecks className="h-3.5 w-3.5 shrink-0" />
+                <span>{t("settings.skillsBulkImportHint")}</span>
+              </div>
+            ) : null}
+
             {activeScan ? (
               <div key={activeScan.tool} className="hub-panel-enter flex flex-col gap-3">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/70">
@@ -2460,8 +2464,8 @@ function SkillsImportView(props: {
                   <>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-xs text-muted-foreground">
-                        {t("settings.skillsHubSelectedShort")} {selectedVisibleCount} /{" "}
-                        {visibleBaseDirs.length}
+                        {t("settings.skillsHubSelectedShort")} {selectedSelectableVisibleCount} /{" "}
+                        {selectableVisibleBaseDirs.length}
                       </div>
                       <Button
                         variant="outline"
