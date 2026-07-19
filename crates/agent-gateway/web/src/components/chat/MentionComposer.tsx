@@ -1426,6 +1426,7 @@ function Popup({
   onSelect: (suggestion: MentionSuggestion) => void;
 }) {
   const popupRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const hlRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     hlRef.current?.scrollIntoView({ block: "nearest" });
@@ -1463,11 +1464,29 @@ function Popup({
         "mention-popup-enter fixed z-[100] overflow-hidden rounded-2xl",
         "border border-black/[0.075] bg-popover text-popover-foreground shadow-sm ring-0 dark:border-white/[0.15]",
       )}
+      onMouseDown={(event) => {
+        // Any mousedown inside the popup must not blur the editor (blur closes
+        // the mention session), except on the native scrollbar strip where
+        // preventDefault would break thumb dragging in some engines.
+        const list = listRef.current;
+        if (list) {
+          const rect = list.getBoundingClientRect();
+          const onScrollbar =
+            event.clientX >= rect.left + list.clientLeft + list.clientWidth &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom;
+          if (onScrollbar) return;
+        }
+        event.preventDefault();
+      }}
     >
       <div className="px-3.5 pb-1.5 pt-3 text-xs font-medium text-muted-foreground">
         {trigger === "skill" ? "Skills" : "文件"}
       </div>
-      <div className="mention-popup-scroll relative flex max-h-[320px] flex-col gap-1 overflow-y-auto px-2 pb-2">
+      <div
+        ref={listRef}
+        className="mention-popup-scroll relative flex max-h-[320px] flex-col overflow-y-auto px-2 pb-2"
+      >
         {isLoading && (
           <div className="px-2 py-2 text-xs text-muted-foreground">Indexing files...</div>
         )}
@@ -1490,7 +1509,11 @@ function Popup({
               }
               ref={i === highlightIndex ? hlRef : undefined}
               className={cn(
-                "mention-popup-item group flex h-[34px] cursor-pointer items-center gap-3 rounded-lg px-3 text-xs leading-5 transition-colors",
+                // Rows are 38px hitboxes with 2px transparent borders so the
+                // visual 34px row keeps the 4px gap while clicks in the gap
+                // still land on a row instead of a dead strip. shrink-0 stops
+                // the max-h flex column from compressing rows before it scrolls.
+                "mention-popup-item group flex h-[38px] shrink-0 cursor-pointer items-center gap-3 rounded-lg border-y-2 border-transparent bg-clip-padding px-3 text-xs leading-5 transition-colors",
                 i === highlightIndex
                   ? "bg-foreground/[0.07] text-foreground"
                   : "text-foreground/85 hover:bg-foreground/[0.05] dark:text-foreground/90",
