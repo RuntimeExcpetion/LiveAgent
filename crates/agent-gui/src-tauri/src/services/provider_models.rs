@@ -1,7 +1,8 @@
 use std::{future::Future, time::Duration};
 
 use futures_util::StreamExt;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{header::HeaderName, Client, StatusCode, Url};
+use serde::Deserialize;
 use serde_json::Value;
 
 const ANTHROPIC_API_VERSION: &str = "2023-06-01";
@@ -10,10 +11,16 @@ const PROVIDER_MODELS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const PROVIDER_MODELS_TIMEOUT_MESSAGE: &str = "供应商模型列表请求超时（10 秒）";
 const CODEX_MODELS_SUFFIXES: [&str; 3] = ["/chat/completions", "/responses", "/response"];
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ProviderCustomHeader {
+    pub key: String,
+    pub value: String,
+}
+
 #[derive(Clone, Debug)]
 struct ProviderModelsAttempt {
     url: Url,
-    headers: Vec<(&'static str, String)>,
+    headers: Vec<(HeaderName, String)>,
 }
 
 #[derive(Debug)]
@@ -26,6 +33,7 @@ pub async fn fetch_provider_models(
     provider_type: &str,
     base_url: &str,
     api_key: &str,
+    custom_headers: &[ProviderCustomHeader],
     use_system_proxy: bool,
 ) -> Result<String, String> {
     // 与本地反代的 x-liveagent-use-system-proxy 语义一致：勾选时代理配置异常
@@ -38,7 +46,13 @@ pub async fn fetch_provider_models(
     };
     with_provider_models_timeout(
         PROVIDER_MODELS_REQUEST_TIMEOUT,
-        fetch_provider_models_with_client(&client, provider_type, base_url, api_key),
+        fetch_provider_models_with_client(
+            &client,
+            provider_type,
+            base_url,
+            api_key,
+            custom_headers,
+        ),
     )
     .await
 }
@@ -60,8 +74,10 @@ async fn fetch_provider_models_with_client(
     provider_type: &str,
     base_url: &str,
     api_key: &str,
+    custom_headers: &[ProviderCustomHeader],
 ) -> Result<String, String> {
-    let attempts = build_provider_models_attempts(provider_type, base_url, api_key)?;
+    let attempts =
+        build_provider_models_attempts(provider_type, base_url, api_key, custom_headers)?;
     let mut failures = Vec::new();
     let mut empty_result = None;
 
@@ -230,11 +246,15 @@ fn build_provider_models_attempts(
     provider_type: &str,
     base_url: &str,
     api_key: &str,
+    custom_headers: &[ProviderCustomHeader],
 ) -> Result<Vec<ProviderModelsAttempt>, String> {
     let base_url = normalize_provider_base_url(provider_type, base_url)?;
     let candidates = [false, true].map(|official| ProviderModelsAttempt {
         url: build_provider_models_url(provider_type, &base_url, official),
-        headers: build_provider_models_headers(provider_type, api_key, official),
+        headers: merge_custom_headers(
+            build_provider_models_headers(provider_type, api_key, official),
+            custom_headers,
+        ),
     });
     let mut attempts = Vec::new();
     for candidate in candidates {
@@ -252,30 +272,74 @@ fn build_provider_models_headers(
     provider_type: &str,
     api_key: &str,
     official: bool,
-) -> Vec<(&'static str, String)> {
-    let mut headers = vec![("content-type", "application/json".to_string())];
+) -> Vec<(HeaderName, String)> {
+    let mut headers = vec![(
+        HeaderName::from_static("content-type"),
+        "application/json".to_string(),
+    )];
     match provider_type {
         "gemini" => {
-            headers.push(("x-goog-api-key", api_key.to_string()));
+            headers.push((
+                HeaderName::from_static("x-goog-api-key"),
+                api_key.to_string(),
+            ));
             if !official {
-                headers.push(("authorization", format!("Bearer {api_key}")));
+                headers.push((
+                    HeaderName::from_static("authorization"),
+                    format!("Bearer {api_key}"),
+                ));
             }
         }
         "claude_code" => {
-            headers.push(("x-api-key", api_key.to_string()));
-            headers.push(("anthropic-version", ANTHROPIC_API_VERSION.to_string()));
+            headers.push((HeaderName::from_static("x-api-key"), api_key.to_string()));
+            headers.push((
+                HeaderName::from_static("anthropic-version"),
+                ANTHROPIC_API_VERSION.to_string(),
+            ));
             if !official {
-                headers.push(("authorization", format!("Bearer {api_key}")));
+                headers.push((
+                    HeaderName::from_static("authorization"),
+                    format!("Bearer {api_key}"),
+                ));
             }
         }
         _ => {
-            headers.push(("authorization", format!("Bearer {api_key}")));
+            headers.push((
+                HeaderName::from_static("authorization"),
+                format!("Bearer {api_key}"),
+            ));
             if !official {
-                headers.push(("x-api-key", api_key.to_string()));
+                headers.push((HeaderName::from_static("x-api-key"), api_key.to_string()));
             }
         }
     }
     headers
+}
+
+fn merge_custom_headers(
+    mut base: Vec<(HeaderName, String)>,
+    custom_headers: &[ProviderCustomHeader],
+) -> Vec<(HeaderName, String)> {
+    for header in custom_headers {
+        let Ok(name) = HeaderName::from_bytes(header.key.as_bytes()) else {
+            continue;
+        };
+        if matches!(
+            name.as_str(),
+            "authorization"
+                | "x-api-key"
+                | "x-goog-api-key"
+                | "anthropic-version"
+                | "content-type"
+                | "host"
+                | "content-length"
+        ) {
+            continue;
+        }
+        base.retain(|(existing, _)| existing != &name);
+        base.push((name, header.value.clone()));
+    }
+    base
 }
 
 fn provider_models_payload_has_entries(payload: &Value) -> bool {
@@ -339,6 +403,7 @@ mod tests {
             "gemini",
             "https://relay.example.com/v1beta/models/gemini-pro:generateContent",
             "key",
+            &[],
         )
         .expect("gemini attempts");
         assert_eq!(
@@ -354,6 +419,7 @@ mod tests {
             "codex",
             "https://relay.example.com/v1/responses",
             "key",
+            &[],
         )
         .expect("codex attempts");
         assert_eq!(codex[0].url.as_str(), "https://relay.example.com/v1/models");
@@ -361,16 +427,65 @@ mod tests {
 
     #[test]
     fn provider_model_urls_reject_credentials_and_queries() {
-        assert!(
-            build_provider_models_attempts("codex", "https://user:pass@example.com/v1", "key")
-                .is_err()
-        );
+        assert!(build_provider_models_attempts(
+            "codex",
+            "https://user:pass@example.com/v1",
+            "key",
+            &[],
+        )
+        .is_err());
         assert!(build_provider_models_attempts(
             "codex",
             "https://example.com/v1?token=secret",
-            "key"
+            "key",
+            &[],
         )
         .is_err());
+    }
+
+    #[test]
+    fn provider_model_attempts_merge_valid_custom_headers_without_overriding_reserved_headers() {
+        let custom_headers = vec![
+            ProviderCustomHeader {
+                key: "X-Request-ID".to_string(),
+                value: "first".to_string(),
+            },
+            ProviderCustomHeader {
+                key: "x-request-id".to_string(),
+                value: "second".to_string(),
+            },
+            ProviderCustomHeader {
+                key: "Authorization".to_string(),
+                value: "Bearer attacker".to_string(),
+            },
+            ProviderCustomHeader {
+                key: "Bad Header".to_string(),
+                value: "ignored".to_string(),
+            },
+        ];
+        let attempts = build_provider_models_attempts(
+            "codex",
+            "https://example.com/v1",
+            "real-key",
+            &custom_headers,
+        )
+        .expect("provider model attempts");
+        let headers = &attempts[0].headers;
+        let value = |name: &str| {
+            headers
+                .iter()
+                .find(|(candidate, _)| candidate.as_str() == name)
+                .map(|(_, value)| value.as_str())
+        };
+        assert_eq!(value("x-request-id"), Some("second"));
+        assert_eq!(value("authorization"), Some("Bearer real-key"));
+        assert_eq!(
+            headers
+                .iter()
+                .filter(|(name, _)| name.as_str() == "x-request-id")
+                .count(),
+            1
+        );
     }
 
     #[tokio::test]
@@ -413,6 +528,7 @@ mod tests {
             "codex",
             "http://provider.invalid",
             "test-key",
+            &[],
         )
         .await
         .expect("fetch provider models");

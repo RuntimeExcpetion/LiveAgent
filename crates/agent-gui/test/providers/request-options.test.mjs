@@ -69,6 +69,8 @@ test("llm facade preserves provider runtime exports", () => {
     "buildGeminiAuthHeaders",
     "buildProviderAuthHeaders",
     "buildProviderRequestMetadata",
+    "isValidCustomHeaderKey",
+    "mergeCustomHeaders",
     "completeAssistantMessage",
     "composePayloadMiddlewares",
     "createModelFromConfig",
@@ -1158,4 +1160,79 @@ test("streaming text reconciler emits only missing final text suffixes", () => {
   assert.equal(reconciler.reconcileFinalText("round-1", "hello world"), " world");
   assert.equal(reconciler.reconcileFinalText("round-1", "different"), "");
   assert.equal(reconciler.reconcileFinalText("round-2", "new"), "new");
+});
+
+test("custom provider headers merge without mutating the base headers", () => {
+  const base = { Accept: "application/json", "X-Tenant": "old" };
+  assert.deepEqual(
+    providers.mergeCustomHeaders(base, [
+      { key: "X-Tenant", value: "new" },
+      { key: "X-Request-ID", value: "request-123" },
+    ]),
+    { Accept: "application/json", "X-Tenant": "new", "X-Request-ID": "request-123" },
+  );
+  assert.deepEqual(base, { Accept: "application/json", "X-Tenant": "old" });
+});
+
+test("custom provider headers cannot override reserved headers case-insensitively", () => {
+  const base = {
+    Authorization: "Bearer real",
+    "x-api-key": "real-api-key",
+    "x-goog-api-key": "real-google-key",
+    "anthropic-version": "2023-06-01",
+    "Content-Type": "application/json",
+    Host: "api.example.com",
+    "Content-Length": "42",
+  };
+  assert.deepEqual(
+    providers.mergeCustomHeaders(base, [
+      { key: "authorization", value: "Bearer attacker" },
+      { key: "X-API-KEY", value: "attacker" },
+      { key: "X-GOOG-API-KEY", value: "attacker" },
+      { key: "Anthropic-Version", value: "attacker" },
+      { key: "content-type", value: "text/plain" },
+      { key: "host", value: "attacker.example" },
+      { key: "content-length", value: "0" },
+    ]),
+    base,
+  );
+});
+
+test("custom provider headers filter invalid HTTP token keys", () => {
+  assert.deepEqual(
+    providers.mergeCustomHeaders({}, [
+      { key: "", value: "empty" },
+      { key: "Bad Header", value: "space" },
+      { key: "Bad:Header", value: "colon" },
+      { key: "Bad\nHeader", value: "newline" },
+      { key: "X.Valid-Header_1", value: "kept" },
+    ]),
+    { "X.Valid-Header_1": "kept" },
+  );
+  assert.equal(providers.isValidCustomHeaderKey("anthropic-beta"), true);
+  assert.equal(providers.isValidCustomHeaderKey("X-Request-ID"), true);
+  assert.equal(providers.isValidCustomHeaderKey("Bad Header"), false);
+});
+
+test("custom provider headers accept undefined and empty arrays", () => {
+  const base = { Accept: "application/json" };
+  assert.deepEqual(providers.mergeCustomHeaders(base, undefined), base);
+  assert.deepEqual(providers.mergeCustomHeaders(base, []), base);
+});
+
+test("provider model attempts include valid custom headers and keep auth headers", () => {
+  const attempts = providerUtils.buildProviderModelsAttempts(
+    "claude_code",
+    "https://api.anthropic.com/v1",
+    "real-key",
+    [
+      { key: "anthropic-beta", value: "feature" },
+      { key: "x-api-key", value: "attacker" },
+    ],
+  );
+  assert.equal(attempts.length, 2);
+  for (const attempt of attempts) {
+    assert.equal(attempt.headers["anthropic-beta"], "feature");
+    assert.equal(attempt.headers["x-api-key"], "real-key");
+  }
 });

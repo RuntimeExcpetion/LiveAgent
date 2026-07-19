@@ -2386,12 +2386,14 @@ export class GatewayWebSocketClient {
     baseUrl: string,
     apiKey: string,
     useSystemProxy = false,
+    customHeaders: Array<{ key: string; value: string }> = [],
   ): Promise<unknown> {
     return this.requestWithRecovery("provider.models", {
       type,
       base_url: baseUrl,
       api_key: apiKey,
       use_system_proxy: useSystemProxy,
+      custom_headers: customHeaders,
     });
   }
 
@@ -3442,6 +3444,7 @@ export type GatewayWebSocketClientLike = {
     baseUrl: string,
     apiKey: string,
     useSystemProxy?: boolean,
+    customHeaders?: Array<{ key: string; value: string }>,
   ): Promise<unknown>;
   dispose(): void;
 };
