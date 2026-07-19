@@ -27,6 +27,7 @@ const EXTERNAL_MCP_TOOL_LABELS: Record<string, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
   "claude-desktop": "Claude Desktop",
+  codebuddy: "CodeBuddy",
 };
 
 /** 与后端 `LOCAL_FILE_MCP_TOOL` 对齐的「从文件导入」来源标识 */

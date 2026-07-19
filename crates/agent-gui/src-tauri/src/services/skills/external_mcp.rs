@@ -1,4 +1,4 @@
-//! 扫描本机其他 AI 工具（Claude Code / Codex / Claude Desktop）已配置的 MCP
+//! 扫描本机其他 AI 工具（Claude Code / Codex / Claude Desktop / CodeBuddy）已配置的 MCP
 //! Server，并支持解析用户手选的本地配置文件（[`scan_mcp_config_file`]），供
 //! MCP Hub「本地导入」页展示后由用户勾选导入。导入本身是纯前端设置写入
 //! （追加进 `AppSettings.mcp.servers`），这里只负责读取与解析配置。
@@ -27,7 +27,12 @@ pub(crate) const LOCAL_FILE_MCP_TOOL: &str = "local-file";
 const MAX_MCP_CONFIG_FILE_BYTES: u64 = 16 * 1024 * 1024;
 
 pub(crate) fn scan_external_mcp_servers() -> Vec<SystemExternalMcpToolScan> {
-    vec![scan_claude_code(), scan_codex(), scan_claude_desktop()]
+    vec![
+        scan_claude_code(),
+        scan_codex(),
+        scan_claude_desktop(),
+        scan_codebuddy(),
+    ]
 }
 
 /// 解析用户手选的本地 MCP 配置文件，供 MCP Hub「本地导入」的「从文件导入」使用。
@@ -259,6 +264,32 @@ fn scan_claude_desktop() -> SystemExternalMcpToolScan {
 
 fn claude_desktop_config_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join("Claude").join("claude_desktop_config.json"))
+}
+
+fn scan_codebuddy() -> SystemExternalMcpToolScan {
+    // CodeBuddy Code 的用户级 MCP 配置：~/.codebuddy/mcp.json，标准 `mcpServers` 对象。
+    let mut servers = Vec::new();
+    let mut errors = Vec::new();
+    let mut scanned_paths = Vec::new();
+
+    let mcp_json = expand_tilde_path("~/.codebuddy/mcp.json");
+    if mcp_json.is_file() {
+        scanned_paths.push("~/.codebuddy/mcp.json".to_string());
+        match read_json(&mcp_json) {
+            Ok(root) => {
+                collect_json_server_map(root.get("mcpServers"), "user", &mut servers, &mut errors);
+            }
+            Err(err) => errors.push(err),
+        }
+    }
+
+    finish_scan(
+        "codebuddy",
+        scanned_paths,
+        "~/.codebuddy/mcp.json",
+        servers,
+        errors,
+    )
 }
 
 fn finish_scan(
