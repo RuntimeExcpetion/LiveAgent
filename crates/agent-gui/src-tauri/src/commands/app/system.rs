@@ -1360,8 +1360,8 @@ mod tests {
         .expect("reuse existing dir");
 
         assert_eq!(
-            response.path,
-            project_folder_display_path(&existing.canonicalize().expect("canonicalize existing dir"))
+            PathBuf::from(response.path),
+            existing.canonicalize().expect("canonicalize existing dir")
         );
     }
 
