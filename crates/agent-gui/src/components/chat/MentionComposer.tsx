@@ -1335,24 +1335,41 @@ function createLargePasteChip(paste: MentionComposerLargePaste) {
   return chip;
 }
 
-function insertNodeAtCursor(root: HTMLElement, node: Node) {
-  const anchor = createCaretAnchorText("");
-  const afterNode = document.createTextNode(anchor.text);
+function insertNodeAtCursor(root: HTMLElement, node: HTMLElement) {
   const sel = window.getSelection();
   if (sel && sel.rangeCount > 0) {
     const range = sel.getRangeAt(0);
-    if (root.contains(range.commonAncestorContainer)) {
-      range.deleteContents();
-      range.insertNode(afterNode);
+    if (editorRangeIsInsideRoot(root, range)) {
+      // A restored selection can carry boundaries inside a non-editable chip
+      // (clicks and double-clicks land there); hop them outside so the new
+      // chip never nests into an existing chip and never guts its label.
+      const startChip = closestComposerChipFromNode(root, range.startContainer);
+      if (startChip) {
+        range.setStartAfter(startChip);
+      }
+      const endChip = closestComposerChipFromNode(root, range.endContainer);
+      if (endChip) {
+        range.setEndBefore(endChip);
+      }
+      if (!range.collapsed) {
+        range.deleteContents();
+      }
       range.insertNode(node);
-      placeCaretInTextNode(afterNode, anchor.caretOffset);
+      // Reuse the split-off text node as the caret anchor instead of minting
+      // a fresh one, so mid-text inserts leave no empty text-node leftovers.
+      const anchor = ensureCaretAnchorAfterChip(node);
+      if (anchor) {
+        placeCaretInTextNode(anchor.textNode, anchor.offset);
+      }
       return;
     }
   }
 
   root.appendChild(node);
-  root.appendChild(afterNode);
-  placeCaretInTextNode(afterNode, anchor.caretOffset);
+  const anchor = ensureCaretAnchorAfterChip(node);
+  if (anchor) {
+    placeCaretInTextNode(anchor.textNode, anchor.offset);
+  }
 }
 
 function scrollSelectionIntoComposerView(root: HTMLElement) {
@@ -2040,6 +2057,32 @@ export const MentionComposer = memo(
       setComposerContextMenu(null);
     }, []);
 
+    const lastEditorSelectionRef = useRef<Range | null>(null);
+    const rememberEditorSelection = useCallback(() => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const range = editorSelectionRange(editor);
+      if (range) {
+        lastEditorSelectionRef.current = range.cloneRange();
+      }
+    }, []);
+    const focusEditorAtSavedSelection = useCallback(() => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const range = lastEditorSelectionRef.current;
+      editor.focus({ preventScroll: true });
+      if (!range || !editorRangeIsInsideRoot(editor, range)) return;
+      const selection = window.getSelection();
+      if (!selection) return;
+      selection.removeAllRanges();
+      selection.addRange(range.cloneRange());
+    }, []);
+
+    useEffect(() => {
+      document.addEventListener("selectionchange", rememberEditorSelection);
+      return () => document.removeEventListener("selectionchange", rememberEditorSelection);
+    }, [rememberEditorSelection]);
+
     const setBusy = useCallback(
       (nextBusy: boolean) => {
         if (isBusyRef.current === nextBusy) return;
@@ -2545,7 +2588,7 @@ export const MentionComposer = memo(
           if (!el) return;
           finishTypewriter();
           resetPromptHistoryRecall();
-          el.focus();
+          focusEditorAtSavedSelection();
           const chip = createFileMentionChip(path, kind);
           if (!chip) return;
           insertNodeAtCursor(el, chip);
@@ -2557,7 +2600,7 @@ export const MentionComposer = memo(
           if (!el) return;
           finishTypewriter();
           resetPromptHistoryRecall();
-          el.focus();
+          focusEditorAtSavedSelection();
           insertNodeAtCursor(el, createSkillMentionChip(skill));
           closeMentionSession();
           refreshEmptyState();
@@ -2567,7 +2610,7 @@ export const MentionComposer = memo(
           if (!el) return;
           finishTypewriter();
           resetPromptHistoryRecall();
-          el.focus();
+          focusEditorAtSavedSelection();
           insertNodeAtCursor(el, createCommitMentionChip(commit));
           closeMentionSession();
           refreshEmptyState();
@@ -2577,7 +2620,7 @@ export const MentionComposer = memo(
           if (!el) return;
           finishTypewriter();
           resetPromptHistoryRecall();
-          el.focus();
+          focusEditorAtSavedSelection();
           insertNodeAtCursor(el, createGitFileMentionChip(file));
           closeMentionSession();
           refreshEmptyState();
@@ -2587,7 +2630,7 @@ export const MentionComposer = memo(
           if (!el) return;
           finishTypewriter();
           resetPromptHistoryRecall();
-          el.focus();
+          focusEditorAtSavedSelection();
           const chip = createCodeMentionChip(reference);
           if (!chip) return;
           insertNodeAtCursor(el, chip);
@@ -2698,6 +2741,7 @@ export const MentionComposer = memo(
         closeComposerContextMenu,
         closeMentionSession,
         finishTypewriter,
+        focusEditorAtSavedSelection,
         insertLargePaste,
         placeCaretAtEditorEnd,
         refreshEmptyState,
@@ -3367,6 +3411,7 @@ export const MentionComposer = memo(
     }, [refreshEmptyState, refreshMention, scheduleBusyRelease]);
 
     const handleBlur = useCallback(() => {
+      rememberEditorSelection();
       isComposingRef.current = false;
       compositionEnterKeyRef.current = false;
       lastCompositionEndAtRef.current = 0;
@@ -3385,6 +3430,7 @@ export const MentionComposer = memo(
       closeCommitTooltip,
       closeComposerContextMenu,
       closeMentionSession,
+      rememberEditorSelection,
       setBusy,
     ]);
 
