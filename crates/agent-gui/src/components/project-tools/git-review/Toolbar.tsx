@@ -44,7 +44,6 @@ import {
 import { Input } from "../../ui/input";
 import { useRightDockToolContext } from "../RightDockContext";
 import {
-  basename,
   type GitBranchFromCommitState,
   type GitBranchSwitchConflictState,
   type GitDiscardConfirmState,
@@ -683,6 +682,11 @@ export function GitReviewToolbar(props: {
   // Which selector the dial exposes; branch is the everyday one, so it wins
   // the full-width dropdown by default.
   const [scope, setScope] = useState<GitReviewScope>("branch");
+  // The repository scope only earns UI when discovery found more than one
+  // repository to pick between; otherwise the dial collapses to a static
+  // branch icon and the branch selector owns the header.
+  const showRepositoryScope = repositories.length > 1;
+  const effectiveScope: GitReviewScope = showRepositoryScope ? scope : "branch";
 
   return (
     <div className="shrink-0 border-b border-border px-3 py-3">
@@ -692,76 +696,72 @@ export function GitReviewToolbar(props: {
         onClose={data.dismissBranchSwitchConflict}
         onConfirm={() => void data.stashAndSwitchBranch()}
       />
-      {/* Single header line: horizontal scope rail, then the active scope's
-          dropdown taking the remaining width, then the action buttons. */}
+      {/* Single header line: horizontal scope rail (only when there are
+          multiple repositories to pick between — with a single repository it
+          collapses to a static branch icon), then the active scope's dropdown
+          taking the remaining width, then the action buttons. */}
       <div className="flex items-center gap-2">
-        <GitReviewScopeDial
-          value={scope}
-          onChange={setScope}
-          repositoryLabel={t("projectTools.gitReview.repositoryPicker")}
-          branchLabel={t("projectTools.gitReview.switchBranch")}
-        />
+        {showRepositoryScope ? (
+          <GitReviewScopeDial
+            value={effectiveScope}
+            onChange={setScope}
+            repositoryLabel={t("projectTools.gitReview.repositoryPicker")}
+            branchLabel={t("projectTools.gitReview.switchBranch")}
+          />
+        ) : (
+          <div
+            className="flex h-7 w-7 shrink-0 items-center justify-center"
+            title={t("projectTools.gitReview.switchBranch")}
+          >
+            <GitBranch className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-300" />
+          </div>
+        )}
         <div className="flex h-7 min-w-0 flex-1 items-stretch overflow-hidden rounded-md border border-border bg-muted/25">
-          {scope === "repository" ? (
-            repositories.length > 1 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={operationBusy}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-[calc(12px*var(--zone-font-scale,1))] font-medium outline-hidden transition-colors hover:bg-muted/70 focus-visible:bg-muted/70 disabled:pointer-events-none disabled:opacity-60"
-                  title={t("projectTools.gitReview.repositoryPicker")}
-                  aria-label={t("projectTools.gitReview.repositoryPicker")}
-                >
-                  <span className="min-w-0 flex-1 truncate text-left">
-                    {selectedGitRepositoryLabel(repositories, selectedRepoRoot) ||
-                      state.repoRoot ||
-                      t("projectTools.gitReview.noRepository")}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground opacity-70" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-56 max-w-72">
-                  <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("projectTools.gitReview.repositoryPicker")}
-                  </DropdownMenuLabel>
-                  {repositories.map((repo) => {
-                    const value = repo.isWorkspaceRoot ? "" : repo.root;
-                    const selected = value === selectedRepoRoot;
-                    return (
-                      <DropdownMenuItem
-                        key={repo.root}
-                        disabled={operationBusy}
-                        onSelect={() => {
-                          if (!selected) selectRepository(value);
-                        }}
-                        className="gap-2 text-xs"
-                        title={repo.root}
-                      >
-                        {selected ? (
-                          <Check className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="min-w-0 flex-1 truncate">
-                          {gitDiscoveredRepositoryLabel(repo)}
-                        </span>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <div
-                className="flex min-w-0 flex-1 items-center px-2 text-[calc(12px*var(--zone-font-scale,1))] font-medium"
-                title={state.repoRoot || undefined}
+          {effectiveScope === "repository" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={operationBusy}
+                className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-[calc(12px*var(--zone-font-scale,1))] font-medium outline-hidden transition-colors hover:bg-muted/70 focus-visible:bg-muted/70 disabled:pointer-events-none disabled:opacity-60"
+                title={t("projectTools.gitReview.repositoryPicker")}
+                aria-label={t("projectTools.gitReview.repositoryPicker")}
               >
-                <span
-                  className={cn("min-w-0 truncate", !state.repoRoot && "text-muted-foreground")}
-                >
-                  {state.repoRoot
-                    ? basename(state.repoRoot)
-                    : disabledMessage || t("projectTools.gitReview.noRepository")}
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {selectedGitRepositoryLabel(repositories, selectedRepoRoot) ||
+                    state.repoRoot ||
+                    t("projectTools.gitReview.noRepository")}
                 </span>
-              </div>
-            )
+                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground opacity-70" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-56 max-w-72">
+                <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("projectTools.gitReview.repositoryPicker")}
+                </DropdownMenuLabel>
+                {repositories.map((repo) => {
+                  const value = repo.isWorkspaceRoot ? "" : repo.root;
+                  const selected = value === selectedRepoRoot;
+                  return (
+                    <DropdownMenuItem
+                      key={repo.root}
+                      disabled={operationBusy}
+                      onSelect={() => {
+                        if (!selected) selectRepository(value);
+                      }}
+                      className="gap-2 text-xs"
+                      title={repo.root}
+                    >
+                      {selected ? (
+                        <Check className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">
+                        {gitDiscoveredRepositoryLabel(repo)}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <GitReviewBranchMenu data={data} writeDisabled={writeDisabled} />
           )}
