@@ -30,6 +30,7 @@ export { Input } from "../../../components/ui/input";
 export { buildModelOptions } from "../../../lib/chat/page/chatPageHelpers";
 export { pokeMemoryOrganizer } from "../../../lib/memory/organizer/service";
 export { parseModelValue, toModelValue } from "../../../lib/providers/llm";
+export { ModelPicker } from "../modelPicker";
 export { AgentActivationSwitch } from "../shared";
 
 /** The desktop GUI runs the organizer in-process; Run Now can poke it. */
