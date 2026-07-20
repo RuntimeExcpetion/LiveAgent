@@ -89,6 +89,10 @@ export function DrawerSelect(props: {
           sideOffset={6}
           collisionPadding={12}
           alignItemWithTrigger={false}
+          // The positioner carries a transform (own stacking context), so the
+          // popup's z-index is trapped inside it; without a z-index here the
+          // whole popup paints beneath the drawer backdrop (z-50).
+          className="z-[9999]"
         >
           <SelectPrimitive.Popup
             className={[
