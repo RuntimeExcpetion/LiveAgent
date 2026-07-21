@@ -1,3 +1,4 @@
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import type { TerminalWireHeader } from "@/lib/gatewaySocketV2/adapters";
 import {
   decodeTerminalServerFrame,
@@ -33,13 +34,13 @@ type PendingAttach = {
 };
 
 function terminalStreamUrl() {
-  const origin = terminalRuntimeOrigin();
+  const origin = getGatewayWebSocketOrigin() || terminalRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway terminal stream origin is unavailable");
   }
   // v2 终端数据面唯一端点（旧 /ws/terminal 与 /ws?terminal=1 回退已淘汰）。
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
   url.pathname = "/ws/v2/terminal";
   url.search = "";
   url.hash = "";

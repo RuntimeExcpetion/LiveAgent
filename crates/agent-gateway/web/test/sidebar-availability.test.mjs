@@ -14,41 +14,24 @@ const {
   shouldDisableGatewaySidebarSections,
 } = loader.loadModule("src/app/sidebar/gatewaySidebarAvailability.ts");
 
-test("gateway sidebar sections require both the transport and desktop Agent to be online", () => {
+test("gateway sidebar sections depend only on the browser gateway transport", () => {
   const cases = [
     {
-      name: "connected and Agent online",
+      name: "connected gateway transport",
       connectionLost: false,
-      agentStatusFresh: true,
-      agentOnline: true,
+      socketConnected: true,
       expected: false,
     },
     {
-      name: "connected but Agent offline",
+      name: "authenticated socket has not connected yet",
       connectionLost: false,
-      agentStatusFresh: true,
-      agentOnline: false,
+      socketConnected: false,
       expected: true,
     },
     {
-      name: "connected before the first Agent status",
-      connectionLost: false,
-      agentStatusFresh: false,
-      agentOnline: null,
-      expected: true,
-    },
-    {
-      name: "connected with an unknown Agent status",
-      connectionLost: false,
-      agentStatusFresh: true,
-      agentOnline: undefined,
-      expected: true,
-    },
-    {
-      name: "transport lost despite the last Agent status being online",
+      name: "transport lost",
       connectionLost: true,
-      agentStatusFresh: false,
-      agentOnline: true,
+      socketConnected: true,
       expected: true,
     },
   ];
@@ -57,8 +40,7 @@ test("gateway sidebar sections require both the transport and desktop Agent to b
     assert.equal(
       shouldDisableGatewaySidebarSections({
         connectionLost: entry.connectionLost,
-        agentStatusFresh: entry.agentStatusFresh,
-        agentOnline: entry.agentOnline,
+        socketConnected: entry.socketConnected,
       }),
       entry.expected,
       entry.name,
@@ -66,31 +48,18 @@ test("gateway sidebar sections require both the transport and desktop Agent to b
   }
 });
 
-test("a reconnected socket stays disabled until it receives a fresh Agent status", () => {
+test("desktop Agent status no longer gates sidebar transport freshness", () => {
   let freshness = INITIAL_GATEWAY_SIDEBAR_STATUS_FRESHNESS;
   const reduce = (event) => {
     freshness = reduceGatewaySidebarStatusFreshness(freshness, event);
   };
-  const isDisabledWithStaleOnlineStatus = () =>
-    shouldDisableGatewaySidebarSections({
-      connectionLost: false,
-      agentStatusFresh: freshness.agentStatusFresh,
-      // Simulate the online=true value cached from the previous socket.
-      agentOnline: true,
-    });
 
   reduce({ type: "connection", connected: true });
+  assert.equal(freshness.socketConnected, true, "socket connection unlocks the sidebar");
+
   reduce({ type: "status" });
-  assert.equal(isDisabledWithStaleOnlineStatus(), false, "the original socket is ready");
+  assert.equal(freshness.socketConnected, true, "Agent status events do not change readiness");
 
   reduce({ type: "connection", connected: false });
-  reduce({ type: "connection", connected: true });
-  assert.equal(
-    isDisabledWithStaleOnlineStatus(),
-    true,
-    "authentication alone must not reuse the previous socket's online status",
-  );
-
-  reduce({ type: "status" });
-  assert.equal(isDisabledWithStaleOnlineStatus(), false, "the fresh status unlocks the sections");
+  assert.equal(freshness.socketConnected, false, "socket disconnect locks the sidebar");
 });
