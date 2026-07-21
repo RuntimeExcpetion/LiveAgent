@@ -230,10 +230,9 @@ export function createWebModuleLoader(options = {}) {
         ? resolveLocal(nextSpecifier, dirname)
         : requireFromRoot.resolve(nextSpecifier);
 
-    const outputText = transpiled.outputText.replaceAll(
-      "import.meta.url",
-      JSON.stringify(pathToFileURL(filePath).href),
-    );
+    const outputText = transpiled.outputText
+      .replaceAll("import.meta.url", JSON.stringify(pathToFileURL(filePath).href))
+      .replaceAll("import.meta.env", "globalThis.__viteImportMetaEnv");
     const wrapped = `(function (exports, require, module, __filename, __dirname) {\n${outputText}\n})`;
     const script = new vm.Script(wrapped, { filename: filePath });
     const compiled = script.runInThisContext();

@@ -18,6 +18,10 @@ function readConfiguredGatewayOrigin(): string {
   return normalizeOrigin(import.meta.env?.[GATEWAY_URL_ENV]);
 }
 
+function pageRequiresSecureTransport(): boolean {
+  return typeof window !== "undefined" && window.location?.protocol === "https:";
+}
+
 export function getBrowserOrigin(): string {
   if (typeof window === "undefined") return "";
   const origin = window.location?.origin;
@@ -27,13 +31,17 @@ export function getBrowserOrigin(): string {
 }
 
 export function getGatewayHttpOrigin(): string {
-  return readConfiguredGatewayOrigin() || getBrowserOrigin();
+  const origin = readConfiguredGatewayOrigin() || getBrowserOrigin();
+  if (!origin || !pageRequiresSecureTransport()) return origin;
+  const url = new URL(origin);
+  if (url.protocol === "http:") url.protocol = "https:";
+  return url.toString().replace(/\/$/, "");
 }
 
 export function getGatewayWebSocketOrigin(): string {
   const origin = getGatewayHttpOrigin();
   if (!origin) return "";
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || pageRequiresSecureTransport() ? "wss:" : "ws:";
   return url.toString().replace(/\/$/, "");
 }
