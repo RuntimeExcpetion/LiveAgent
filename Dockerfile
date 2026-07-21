@@ -11,6 +11,7 @@ ARG WEBUI_RAYON_NUM_THREADS=2
 ARG WEBUI_NODE_OPTIONS=--max-old-space-size=1024
 ENV RAYON_NUM_THREADS=${WEBUI_RAYON_NUM_THREADS}
 ENV NODE_OPTIONS=${WEBUI_NODE_OPTIONS}
+ENV LIVEAGENT_WEBUI_DOCKER_BUILD=1
 
 COPY crates/agent-gateway/web/package.json crates/agent-gateway/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
