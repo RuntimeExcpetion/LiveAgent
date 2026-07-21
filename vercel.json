@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd crates/agent-gateway/web && pnpm install --frozen-lockfile",
+  "buildCommand": "cd crates/agent-gateway/web && pnpm build",
+  "outputDirectory": "crates/agent-gateway/web/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

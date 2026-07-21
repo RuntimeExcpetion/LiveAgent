@@ -1,3 +1,4 @@
+import { getGatewayHttpOrigin } from "./gatewayBaseUrl";
 function readUnauthorizedErrorMessage(errorText: string) {
   return errorText === "unauthorized" ? "Access Token 错误，请检查后重试。" : errorText;
 }
@@ -42,7 +43,7 @@ export async function verifyGatewayAccessToken(input: string) {
     throw new Error("请输入 Access Token。");
   }
 
-  const response = await fetch(`${window.location.origin}/api/status`, {
+  const response = await fetch(`${getGatewayHttpOrigin()}/api/status`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
