@@ -5,10 +5,24 @@ FROM node:22.17.1-bookworm-slim AS webui
 WORKDIR /src/crates/agent-gateway/web
 RUN npm install -g pnpm@10.32.1
 
+# Keep Vite/Rolldown builds inside small Docker Desktop memory limits.
+# Rolldown uses native worker threads; capping Rayon avoids concurrent peak RSS.
+ARG WEBUI_RAYON_NUM_THREADS=2
+ARG WEBUI_NODE_OPTIONS=--max-old-space-size=1024
+ENV RAYON_NUM_THREADS=${WEBUI_RAYON_NUM_THREADS}
+ENV NODE_OPTIONS=${WEBUI_NODE_OPTIONS}
+ENV LIVEAGENT_WEBUI_DOCKER_BUILD=1
+
 COPY crates/agent-gateway/web/package.json crates/agent-gateway/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY crates/agent-gateway/web ./
+
+FROM webui AS webui-test
+RUN pnpm test
+RUN pnpm lint
+
+FROM webui AS webui-build
 RUN pnpm build
 
 FROM golang:1.25-bookworm AS gateway-builder
@@ -22,7 +36,7 @@ COPY crates/agent-gateway/go.mod crates/agent-gateway/go.sum ./
 RUN go mod download
 
 COPY crates/agent-gateway ./
-COPY --from=webui /src/crates/agent-gateway/web/dist ./web/dist
+COPY --from=webui-build /src/crates/agent-gateway/web/dist ./web/dist
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/liveagent-gateway ./cmd/gateway
