@@ -5,6 +5,13 @@ FROM node:22.17.1-bookworm-slim AS webui
 WORKDIR /src/crates/agent-gateway/web
 RUN npm install -g pnpm@10.32.1
 
+# Keep Vite/Rolldown builds inside small Docker Desktop memory limits.
+# Rolldown uses native worker threads; capping Rayon avoids concurrent peak RSS.
+ARG WEBUI_RAYON_NUM_THREADS=2
+ARG WEBUI_NODE_OPTIONS=--max-old-space-size=1024
+ENV RAYON_NUM_THREADS=${WEBUI_RAYON_NUM_THREADS}
+ENV NODE_OPTIONS=${WEBUI_NODE_OPTIONS}
+
 COPY crates/agent-gateway/web/package.json crates/agent-gateway/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
