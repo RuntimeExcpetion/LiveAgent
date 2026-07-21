@@ -1,3 +1,4 @@
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import type { TerminalWireHeader } from "@/lib/gatewaySocketV2/adapters";
 import {
   decodeTerminalServerFrame,
@@ -33,7 +34,7 @@ type PendingAttach = {
 };
 
 function terminalStreamUrl() {
-  const origin = terminalRuntimeOrigin();
+  const origin = getGatewayWebSocketOrigin() || terminalRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway terminal stream origin is unavailable");
   }

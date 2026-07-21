@@ -22,6 +22,7 @@ import type {
   SftpTransferResponse,
 } from "@/lib/sftp/types";
 import { createUuid } from "@/lib/shared/id";
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import { BrowserGatewayTerminalStreamClient } from "@/lib/terminal/gatewayTerminalStreamClient";
 import type {
   SshTerminalTab,
@@ -541,7 +542,7 @@ function asErrorMessage(error: unknown, fallback: string) {
 }
 
 function buildWebSocketUrl() {
-  const origin = getRuntimeOrigin();
+  const origin = getGatewayWebSocketOrigin() || getRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway WebSocket origin is unavailable");
   }

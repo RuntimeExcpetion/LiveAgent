@@ -1,6 +1,3 @@
-import type { KnownProvider, ModelThinkingLevel } from "@earendil-works/pi-ai";
-import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
-import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 import { DEFAULT_LOCALE, type Locale, normalizeLocale } from "../../i18n/config";
 import { createUuid } from "../shared/id";
 import { mergeAlwaysEnabledSkillNames } from "../skills/builtin";
@@ -9,13 +6,94 @@ import { normalizeApiKey, normalizeBaseUrl, normalizeModels } from "./normalize"
 
 export type { SystemToolId } from "../tools/systemToolOptions";
 
+type KnownProvider = "openai" | "anthropic" | "google";
+
+type WebKnownModel = {
+  id: string;
+  contextWindow: number;
+  maxTokens: number;
+  reasoning?: boolean;
+  thinkingLevelMap?: Partial<Record<ReasoningLevel, string>>;
+  compat?: {
+    forceAdaptiveThinking?: boolean;
+  };
+};
+
+// Keep the browser bundle lean: importing @earendil-works/pi-ai/providers/all
+// pulls the full provider catalog plus Node-only provider-env helpers into
+// Vite/Rolldown. The WebUI only needs a small set of well-known defaults for
+// local controls; dynamic provider/model lists still come from gateway sync.
+const WEB_KNOWN_MODELS: Record<KnownProvider, WebKnownModel[]> = {
+  openai: [
+    { id: "gpt-5", contextWindow: 400_000, maxTokens: 128_000, reasoning: true },
+    {
+      id: "gpt-5.2",
+      contextWindow: 400_000,
+      maxTokens: 128_000,
+      reasoning: true,
+      thinkingLevelMap: { xhigh: "xhigh" },
+    },
+  ],
+  anthropic: [
+    {
+      id: "claude-opus-4-8",
+      contextWindow: 200_000,
+      maxTokens: 32_000,
+      reasoning: true,
+      thinkingLevelMap: { xhigh: "xhigh", max: "max" },
+    },
+    {
+      id: "claude-sonnet-4-6",
+      contextWindow: 1_000_000,
+      maxTokens: 32_000,
+      reasoning: true,
+      thinkingLevelMap: { max: "max" },
+      compat: { forceAdaptiveThinking: true },
+    },
+    {
+      id: "claude-fable-5",
+      contextWindow: 1_000_000,
+      maxTokens: 32_000,
+      reasoning: true,
+      thinkingLevelMap: { xhigh: "xhigh", max: "max" },
+      compat: { forceAdaptiveThinking: true },
+    },
+    {
+      id: "claude-sonnet-4-5",
+      contextWindow: 200_000,
+      maxTokens: 32_000,
+      reasoning: true,
+    },
+  ],
+  google: [
+    { id: "gemini-2.5-pro", contextWindow: 1_000_000, maxTokens: 65_536, reasoning: true },
+  ],
+};
+
+function getBuiltinModels(provider: KnownProvider): WebKnownModel[] {
+  return WEB_KNOWN_MODELS[provider];
+}
+
+function getSupportedThinkingLevels(
+  model: Pick<WebKnownModel, "reasoning" | "thinkingLevelMap" | "compat">,
+): ReasoningLevel[] {
+  if (model.reasoning !== true) return [];
+  const levels: ReasoningLevel[] =
+    model.compat?.forceAdaptiveThinking === true
+      ? ["minimal", "low", "medium", "high"]
+      : ["off", "minimal", "low", "medium", "high"];
+  if (model.thinkingLevelMap?.xhigh) levels.push("xhigh");
+  if (model.thinkingLevelMap?.max) levels.push("max");
+  return levels;
+}
+
 export type ProviderId = "codex" | "claude_code" | "gemini";
 
 export type ExecutionMode = "text" | "tools" | "agent-dev";
 
 export type CodexRequestFormat = "openai-completions" | "openai-responses";
 
-export type ReasoningLevel = ModelThinkingLevel;
+export type ReasoningLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type McpTransport = "stdio" | "http" | "sse";
 
@@ -1152,7 +1230,7 @@ export function getKnownModelThinkingLevels(
     ({
       reasoning: true,
       ...(customThinkingLevelMap ? { thinkingLevelMap: customThinkingLevelMap } : {}),
-    } as Parameters<typeof getSupportedThinkingLevels>[0]);
+    } satisfies Pick<WebKnownModel, "reasoning" | "thinkingLevelMap">);
   return getSupportedThinkingLevels(model).filter((level) => level !== "off");
 }
 
