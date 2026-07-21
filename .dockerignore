@@ -1,23 +1,12 @@
-.git
-.github
-.codex
-.claude
-.codex-artifacts
-.liveagent
+# The gateway Docker image is web-only: keep the build context focused on the
+# Go gateway and WebUI sources, and leave the desktop/Tauri client out.
+**
+!Dockerfile
+!crates/
+!crates/agent-gateway/
+!crates/agent-gateway/**
 
-**/node_modules
-**/dist
-**/target
-**/bin
-**/*.tsbuildinfo
-
-logs
-*.log
-*.local
-.DS_Store
-.idea
-.vscode
-
-cert
-workspace
-workspace.zip
+# Never send local build/dependency artifacts into the Docker context.
+crates/agent-gateway/bin/
+crates/agent-gateway/web/dist/
+crates/agent-gateway/web/node_modules/
