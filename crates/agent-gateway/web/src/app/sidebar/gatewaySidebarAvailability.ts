@@ -1,6 +1,5 @@
 export type GatewaySidebarStatusFreshnessState = {
   socketConnected: boolean;
-  agentStatusFresh: boolean;
 };
 
 export type GatewaySidebarStatusFreshnessEvent =
@@ -9,7 +8,6 @@ export type GatewaySidebarStatusFreshnessEvent =
 
 export const INITIAL_GATEWAY_SIDEBAR_STATUS_FRESHNESS: GatewaySidebarStatusFreshnessState = {
   socketConnected: false,
-  agentStatusFresh: false,
 };
 
 export function reduceGatewaySidebarStatusFreshness(
@@ -17,23 +15,14 @@ export function reduceGatewaySidebarStatusFreshness(
   event: GatewaySidebarStatusFreshnessEvent,
 ): GatewaySidebarStatusFreshnessState {
   if (event.type === "connection") {
-    return {
-      socketConnected: event.connected,
-      // Every authenticated socket starts a new status epoch. The previous
-      // socket's cached online verdict cannot make the new path interactive.
-      agentStatusFresh: false,
-    };
+    return { socketConnected: event.connected };
   }
-  return {
-    ...state,
-    agentStatusFresh: state.socketConnected,
-  };
+  return state;
 }
 
 export function shouldDisableGatewaySidebarSections(input: {
   connectionLost: boolean;
-  agentStatusFresh: boolean;
-  agentOnline: boolean | null | undefined;
+  socketConnected: boolean;
 }): boolean {
-  return input.connectionLost || !input.agentStatusFresh || input.agentOnline !== true;
+  return input.connectionLost || !input.socketConnected;
 }
