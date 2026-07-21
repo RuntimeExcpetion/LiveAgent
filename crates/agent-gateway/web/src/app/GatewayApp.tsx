@@ -3017,7 +3017,7 @@ export default function GatewayApp() {
     // freshly loaded list.
     void refreshSharedHistoryItems(api, {
       force: true,
-      generation: status.session_id?.trim() || "online",
+      generation: status?.session_id?.trim() || "online",
     });
   }, [
     api,
