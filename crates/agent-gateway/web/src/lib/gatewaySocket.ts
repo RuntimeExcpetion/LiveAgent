@@ -547,7 +547,7 @@ function buildWebSocketUrl() {
     throw new Error("Gateway WebSocket origin is unavailable");
   }
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
   // v2 统一线协议端点（WebSocket + Protobuf 二进制帧）。
   url.pathname = "/ws/v2";
   url.search = "";
