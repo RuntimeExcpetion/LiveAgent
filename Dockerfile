@@ -9,6 +9,12 @@ COPY crates/agent-gateway/web/package.json crates/agent-gateway/web/pnpm-lock.ya
 RUN pnpm install --frozen-lockfile
 
 COPY crates/agent-gateway/web ./
+
+FROM webui AS webui-test
+RUN pnpm test
+RUN pnpm lint
+
+FROM webui AS webui-build
 RUN pnpm build
 
 FROM golang:1.25-bookworm AS gateway-builder
@@ -22,7 +28,7 @@ COPY crates/agent-gateway/go.mod crates/agent-gateway/go.sum ./
 RUN go mod download
 
 COPY crates/agent-gateway ./
-COPY --from=webui /src/crates/agent-gateway/web/dist ./web/dist
+COPY --from=webui-build /src/crates/agent-gateway/web/dist ./web/dist
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/liveagent-gateway ./cmd/gateway
