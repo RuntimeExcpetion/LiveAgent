@@ -76,9 +76,9 @@ function getBuiltinModels(provider: KnownProvider): WebKnownModel[] {
 
 function getSupportedThinkingLevels(
   model: Pick<WebKnownModel, "reasoning" | "thinkingLevelMap" | "compat">,
-): Array<ReasoningLevel | "off"> {
+): ReasoningLevel[] {
   if (model.reasoning !== true) return [];
-  const levels: Array<ReasoningLevel | "off"> =
+  const levels: ReasoningLevel[] =
     model.compat?.forceAdaptiveThinking === true
       ? ["minimal", "low", "medium", "high"]
       : ["off", "minimal", "low", "medium", "high"];
@@ -93,7 +93,7 @@ export type ExecutionMode = "text" | "tools" | "agent-dev";
 
 export type CodexRequestFormat = "openai-completions" | "openai-responses";
 
-export type ReasoningLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ReasoningLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type McpTransport = "stdio" | "http" | "sse";
 

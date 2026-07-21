@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        WEBUI_RAYON_NUM_THREADS: ${WEBUI_RAYON_NUM_THREADS:-2}
+        WEBUI_NODE_OPTIONS: ${WEBUI_NODE_OPTIONS:---max-old-space-size=1024}
     image: ${GATEWAY_DOCKER_IMAGE:-liveagent-gateway:local}
     environment:
       LIVEAGENT_GATEWAY_TOKEN: ${LIVEAGENT_GATEWAY_TOKEN:-dev-token}
