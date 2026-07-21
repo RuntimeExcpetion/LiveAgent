@@ -22,6 +22,7 @@ import type {
   SftpTransferResponse,
 } from "@/lib/sftp/types";
 import { createUuid } from "@/lib/shared/id";
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import { BrowserGatewayTerminalStreamClient } from "@/lib/terminal/gatewayTerminalStreamClient";
 import type {
   SshTerminalTab,
@@ -541,12 +542,12 @@ function asErrorMessage(error: unknown, fallback: string) {
 }
 
 function buildWebSocketUrl() {
-  const origin = getRuntimeOrigin();
+  const origin = getGatewayWebSocketOrigin() || getRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway WebSocket origin is unavailable");
   }
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
   // v2 统一线协议端点（WebSocket + Protobuf 二进制帧）。
   url.pathname = "/ws/v2";
   url.search = "";

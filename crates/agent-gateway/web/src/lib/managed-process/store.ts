@@ -9,11 +9,19 @@ import { useSyncExternalStore } from "react";
 import { backend } from "./backend";
 import type { ManagedProcessLog, ManagedProcessState } from "./types";
 
+const MANAGED_PROCESS_DISABLED = import.meta.env?.VITE_DISABLE_MANAGED_PROCESS === "1";
+
 const EMPTY_STATE: ManagedProcessState = {
   ready: false,
   agentOnline: true,
   revision: 0,
   processes: [],
+};
+
+const DISABLED_STATE: ManagedProcessState = {
+  ...EMPTY_STATE,
+  ready: true,
+  agentOnline: false,
 };
 
 let state: ManagedProcessState = EMPTY_STATE;
@@ -56,6 +64,10 @@ export function feedManagedProcessState(next: ManagedProcessState) {
 
 /** Idempotent: subscribes to backend change events and loads the initial snapshot. */
 export function ensureManagedProcessInit(): Promise<void> {
+  if (MANAGED_PROCESS_DISABLED) {
+    feedManagedProcessState(DISABLED_STATE);
+    return Promise.resolve();
+  }
   if (!initPromise) {
     initPromise = (async () => {
       const unsubscribe = backend.subscribe(feedManagedProcessState);
