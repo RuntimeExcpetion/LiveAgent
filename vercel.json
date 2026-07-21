@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "corepack enable && corepack prepare pnpm@10.32.1 --activate && pnpm --dir crates/agent-gateway/web install --frozen-lockfile",
+  "buildCommand": "corepack enable && corepack prepare pnpm@10.32.1 --activate && pnpm --dir crates/agent-gateway/web build",
+  "outputDirectory": "crates/agent-gateway/web/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
