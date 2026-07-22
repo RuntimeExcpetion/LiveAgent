@@ -21,6 +21,7 @@ const INPUT_RETRY_MS = 25;
 const INPUT_HIGH_WATER_BYTES = 256 * 1024;
 const INPUT_LOW_WATER_BYTES = 128 * 1024;
 const ATTACH_RETRY_MS = 250;
+const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
 // 帧头形状沿用旧自定义帧的命名；v2 下由适配层映射到 TerminalStreamFrame。
 type TerminalFrameHeader = TerminalWireHeader;
@@ -34,6 +35,9 @@ type PendingAttach = {
 };
 
 function terminalStreamUrl() {
+  if (GATEWAY_WEBSOCKET_DISABLED) {
+    throw new Error("Gateway WebSocket is disabled for this deployment");
+  }
   const origin = getGatewayWebSocketOrigin() || terminalRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway terminal stream origin is unavailable");
