@@ -5,7 +5,7 @@ This mode keeps the original LiveAgent WebUI and uses serverless API endpoints i
 It provides Vercel-compatible serverless endpoints at the repository root:
 
 - `GET /api/status` returns a lightweight web-only health payload.
-- `POST /api/chat` forwards a non-streaming chat completion request to an OpenAI-compatible API.
+- `POST /api/chat` forwards chat completion requests to an OpenAI-compatible API. Set `stream: true` to receive SSE `thinking`, `token`, and `done` events.
 - `POST /api/models` fetches model IDs through the backend so the original settings UI can refresh models without Gateway.
 
 ## Required environment variables
@@ -31,6 +31,16 @@ curl -X POST https://your-app.vercel.app/api/chat \
   -H 'content-type: application/json' \
   -d '{"message":"Hello","model":"gpt-4.1-mini"}'
 ```
+
+## Streaming responses
+
+When the original WebUI runs with `VITE_DISABLE_GATEWAY_WEBSOCKET=1`, chat requests are sent to `/api/chat` with `stream: true`. The endpoint proxies upstream SSE chunks and emits:
+
+- `thinking` for provider reasoning fields such as `reasoning_content`, `reasoning`, or `thinking`.
+- `token` for visible assistant text.
+- `done` when the upstream sends `[DONE]` or the stream closes.
+
+The UI can only show thinking content when the selected OpenAI-compatible provider exposes it; hidden chain-of-thought that the provider does not return cannot be displayed.
 
 ## Important limitations
 

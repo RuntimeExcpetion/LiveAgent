@@ -30,6 +30,69 @@ function normalizeMessages(value, fallbackPrompt) {
   return prompt ? [{ role: "user", content: prompt }] : [];
 }
 
+function writeSse(response, event, data) {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function readChoiceDelta(payload) {
+  const choice = Array.isArray(payload?.choices) ? payload.choices[0] : null;
+  const delta = choice?.delta ?? choice?.message ?? {};
+  const content =
+    typeof delta?.content === "string"
+      ? delta.content
+      : typeof choice?.text === "string"
+        ? choice.text
+        : "";
+  const thinking =
+    typeof delta?.reasoning_content === "string"
+      ? delta.reasoning_content
+      : typeof delta?.reasoning === "string"
+        ? delta.reasoning
+        : typeof delta?.thinking === "string"
+          ? delta.thinking
+          : "";
+  return { content, thinking };
+}
+
+async function streamUpstreamResponse(upstreamResponse, response) {
+  response.statusCode = 200;
+  response.setHeader("content-type", "text/event-stream; charset=utf-8");
+  response.setHeader("cache-control", "no-cache, no-transform");
+  response.setHeader("connection", "keep-alive");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of upstreamResponse.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (!data) continue;
+      if (data === "[DONE]") {
+        writeSse(response, "done", {});
+        response.end();
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      const { content, thinking } = readChoiceDelta(payload);
+      if (thinking) writeSse(response, "thinking", { text: thinking });
+      if (content) writeSse(response, "token", { text: content });
+    }
+  }
+
+  writeSse(response, "done", {});
+  response.end();
+}
+
 module.exports = async function chat(request, response) {
   if (request.method !== "POST") {
     response.setHeader("allow", "POST");
@@ -77,9 +140,14 @@ module.exports = async function chat(request, response) {
       messages,
       temperature: typeof body.temperature === "number" ? body.temperature : undefined,
       max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : undefined,
-      stream: false,
+      stream: body.stream === true,
     }),
   });
+
+  if (upstreamResponse.ok && body.stream === true && upstreamResponse.body) {
+    await streamUpstreamResponse(upstreamResponse, response);
+    return;
+  }
 
   const upstreamText = await upstreamResponse.text();
   let upstreamJson = null;

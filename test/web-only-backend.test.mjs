@@ -29,8 +29,12 @@ class MockResponse {
     this.headers.set(key.toLowerCase(), value);
   }
 
+  write(value = "") {
+    this.body += String(value);
+  }
+
   end(value = "") {
-    this.body = String(value);
+    this.body += String(value);
   }
 
   json() {
@@ -241,5 +245,64 @@ test("web-only chat accepts Vercel-style VITE provider env names", async () => {
     else process.env.OPENAI_BASE_URL = originalBaseUrl;
     if (originalViteBaseUrl === undefined) delete process.env.VITE_OPENAI_BASE_URL;
     else process.env.VITE_OPENAI_BASE_URL = originalViteBaseUrl;
+  }
+});
+
+
+test("web-only chat streams tokens and thinking over SSE", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.OPENAI_API_KEY;
+  const originalBaseUrl = process.env.OPENAI_BASE_URL;
+  const originalCompatibleBaseUrl = process.env.OPENAI_COMPATIBLE_BASE_URL;
+  const originalLlmBaseUrl = process.env.LLM_BASE_URL;
+  const originalViteBaseUrl = process.env.VITE_OPENAI_BASE_URL;
+  const originalViteCompatibleBaseUrl = process.env.VITE_OPENAI_COMPATIBLE_BASE_URL;
+  process.env.OPENAI_API_KEY = "test-key";
+  delete process.env.OPENAI_BASE_URL;
+  delete process.env.OPENAI_COMPATIBLE_BASE_URL;
+  delete process.env.LLM_BASE_URL;
+  delete process.env.VITE_OPENAI_BASE_URL;
+  delete process.env.VITE_OPENAI_COMPATIBLE_BASE_URL;
+  let captured;
+  const upstream = [
+    'data: {"choices":[{"delta":{"reasoning_content":"thinking..."}}]}\n\n',
+    'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n',
+    'data: [DONE]\n\n',
+  ].join("");
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return new Response(upstream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  };
+
+  try {
+    const response = new MockResponse();
+    await chat(
+      new MockRequest({ method: "POST", body: JSON.stringify({ message: "Hello", stream: true }) }),
+      response,
+    );
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(captured.url, "https://api.openai.com/v1/chat/completions");
+    assert.equal(JSON.parse(captured.init.body).stream, true);
+    assert.match(response.body, /event: thinking\ndata: {"text":"thinking\.\.\."}/);
+    assert.match(response.body, /event: token\ndata: {"text":"Hello"}/);
+    assert.match(response.body, /event: done\ndata: {}/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalApiKey;
+    if (originalBaseUrl === undefined) delete process.env.OPENAI_BASE_URL;
+    else process.env.OPENAI_BASE_URL = originalBaseUrl;
+    if (originalCompatibleBaseUrl === undefined) delete process.env.OPENAI_COMPATIBLE_BASE_URL;
+    else process.env.OPENAI_COMPATIBLE_BASE_URL = originalCompatibleBaseUrl;
+    if (originalLlmBaseUrl === undefined) delete process.env.LLM_BASE_URL;
+    else process.env.LLM_BASE_URL = originalLlmBaseUrl;
+    if (originalViteBaseUrl === undefined) delete process.env.VITE_OPENAI_BASE_URL;
+    else process.env.VITE_OPENAI_BASE_URL = originalViteBaseUrl;
+    if (originalViteCompatibleBaseUrl === undefined) delete process.env.VITE_OPENAI_COMPATIBLE_BASE_URL;
+    else process.env.VITE_OPENAI_COMPATIBLE_BASE_URL = originalViteCompatibleBaseUrl;
   }
 });

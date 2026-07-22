@@ -102,6 +102,42 @@ function createApiOnlyStatus(): AgentStatus {
   };
 }
 
+async function* readWebOnlySseEvents(response: Response): AsyncGenerator<{ event: string; data: unknown }> {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+    for (const part of parts) {
+      let event = "message";
+      let data = "";
+      for (const line of part.split(/\r?\n/)) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (!data) continue;
+      try {
+        yield { event, data: JSON.parse(data) };
+      } catch {
+        yield { event, data };
+      }
+    }
+  }
+}
+
+function readSseText(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (data && typeof data === "object" && "text" in data) {
+    return String((data as { text?: unknown }).text ?? "");
+  }
+  return "";
+}
+
 type StatusListener = (status: AgentStatus | null, error: string | null) => void;
 type HistoryListener = (event: GatewayHistoryEvent) => void;
 type SettingsListener = (event: GatewaySettingsSyncPayload) => void;
@@ -1753,15 +1789,30 @@ export class GatewayWebSocketClient {
           model: params.input.selectedModel?.model,
           baseUrl: params.input.apiOnlyProvider?.baseUrl,
           apiKey: params.input.apiOnlyProvider?.apiKey,
+          stream: true,
         }),
       });
-      const payload = await response.json().catch(() => ({}));
+      const contentType = response.headers.get("content-type") || "";
       if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
         throw new Error(payload?.message || `chat failed: ${response.status}`);
       }
-      const text = String(payload?.message ?? "").trim();
-      if (text) {
-        emit({ type: "token", text, conversation_id: params.conversationId });
+      if (contentType.includes("text/event-stream")) {
+        for await (const item of readWebOnlySseEvents(response)) {
+          if (item.event === "thinking") {
+            const text = readSseText(item.data);
+            if (text) emit({ type: "thinking", text, conversation_id: params.conversationId });
+          } else if (item.event === "token") {
+            const text = readSseText(item.data);
+            if (text) emit({ type: "token", text, conversation_id: params.conversationId });
+          }
+        }
+      } else {
+        const payload = await response.json().catch(() => ({}));
+        const text = String(payload?.message ?? "").trim();
+        if (text) {
+          emit({ type: "token", text, conversation_id: params.conversationId });
+        }
       }
       emit({ type: "done", conversation_id: params.conversationId });
       emit({
