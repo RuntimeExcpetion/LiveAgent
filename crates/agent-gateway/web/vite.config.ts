@@ -14,40 +14,47 @@ function resolveProxyTarget() {
   return process.env.npm_config_proxy_api || DEFAULT_PROXY_API;
 }
 
-export default defineConfig(() => ({
-  plugins: [react(), Icons({ compiler: "jsx", jsx: "react" })],
-  resolve: {
-    dedupe: ["react", "react-dom"],
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@tauri-apps/api/core": path.resolve(__dirname, "./src/shims/tauriCore.ts"),
-      "@tauri-apps/api/event": path.resolve(__dirname, "./src/shims/tauriEvent.ts"),
-      "@tauri-apps/plugin-opener": path.resolve(__dirname, "./src/shims/tauriOpener.ts"),
-      react: path.resolve(__dirname, "./node_modules/react"),
-      "react/jsx-runtime": path.resolve(__dirname, "./node_modules/react/jsx-runtime.js"),
-      "react/jsx-dev-runtime": path.resolve(__dirname, "./node_modules/react/jsx-dev-runtime.js"),
-      "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
-    },
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-  },
-  server: {
-    proxy: {
-      "/api": {
-        target: resolveProxyTarget(),
-        changeOrigin: true,
-      },
-      "/ws": {
-        target: resolveProxyTarget(),
-        changeOrigin: true,
-        ws: true,
-      },
-      "/image-proxy": {
-        target: resolveProxyTarget(),
-        changeOrigin: true,
+export default defineConfig(() => {
+  const dockerBuild = process.env.LIVEAGENT_WEBUI_DOCKER_BUILD === "1";
+
+  return {
+    plugins: [react(), Icons({ compiler: "jsx", jsx: "react" })],
+    resolve: {
+      dedupe: ["react", "react-dom"],
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+        "@tauri-apps/api/core": path.resolve(__dirname, "./src/shims/tauriCore.ts"),
+        "@tauri-apps/api/event": path.resolve(__dirname, "./src/shims/tauriEvent.ts"),
+        "@tauri-apps/plugin-opener": path.resolve(__dirname, "./src/shims/tauriOpener.ts"),
+        react: path.resolve(__dirname, "./node_modules/react"),
+        "react/jsx-runtime": path.resolve(__dirname, "./node_modules/react/jsx-runtime.js"),
+        "react/jsx-dev-runtime": path.resolve(__dirname, "./node_modules/react/jsx-dev-runtime.js"),
+        "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
       },
     },
-  },
-}));
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+      minify: dockerBuild ? false : "esbuild",
+      cssMinify: dockerBuild ? false : undefined,
+      reportCompressedSize: !dockerBuild,
+    },
+    server: {
+      proxy: {
+        "/api": {
+          target: resolveProxyTarget(),
+          changeOrigin: true,
+        },
+        "/ws": {
+          target: resolveProxyTarget(),
+          changeOrigin: true,
+          ws: true,
+        },
+        "/image-proxy": {
+          target: resolveProxyTarget(),
+          changeOrigin: true,
+        },
+      },
+    },
+  };
+});
