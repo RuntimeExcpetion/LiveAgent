@@ -22,7 +22,9 @@ import type {
   SftpTransferResponse,
 } from "@/lib/sftp/types";
 import { createUuid } from "@/lib/shared/id";
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import { BrowserGatewayTerminalStreamClient } from "@/lib/terminal/gatewayTerminalStreamClient";
+
 import type {
   SshTerminalTab,
   SshTerminalTabKind,
@@ -77,6 +79,8 @@ import type {
   MemoryManagePayload,
   RunningConversationSummary,
 } from "./gatewayTypes";
+
+const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
 type StatusListener = (status: AgentStatus | null, error: string | null) => void;
 type HistoryListener = (event: GatewayHistoryEvent) => void;
@@ -541,12 +545,12 @@ function asErrorMessage(error: unknown, fallback: string) {
 }
 
 function buildWebSocketUrl() {
-  const origin = getRuntimeOrigin();
+  const origin = getGatewayWebSocketOrigin() || getRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway WebSocket origin is unavailable");
   }
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
   // v2 统一线协议端点（WebSocket + Protobuf 二进制帧）。
   url.pathname = "/ws/v2";
   url.search = "";
@@ -1602,6 +1606,9 @@ export class GatewayWebSocketClient {
     if (this.token.trim() === "") {
       throw new Error("Gateway token is required");
     }
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      throw new Error("Gateway WebSocket is disabled for this deployment");
+    }
     // Build exactly once: the gateway deduplicates by client_request_id, so a
     // lost acknowledgement can be retried after reconnect without dispatching
     // a second desktop run. Rebuilding here could generate a different id for
@@ -2514,6 +2521,7 @@ export class GatewayWebSocketClient {
 
   private shouldMaintainConnection() {
     return (
+      !GATEWAY_WEBSOCKET_DISABLED &&
       !this.disposed &&
       this.token.trim() !== "" &&
       (this.pending.size > 0 ||
@@ -2782,6 +2790,9 @@ export class GatewayWebSocketClient {
     }
     if (this.token.trim() === "") {
       throw new Error("Gateway token is required");
+    }
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      throw new Error("Gateway WebSocket is disabled for this deployment");
     }
     if (this.socket && this.authenticated && this.socket.readyState === WebSocket.OPEN) {
       if (this.shouldRecycleAuthenticatedSocket()) {
