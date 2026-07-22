@@ -132,6 +132,11 @@ type GatewayChatSystemSettings = {
   selectedSystemTools?: string[];
 };
 
+type GatewayApiOnlyProviderSettings = {
+  baseUrl?: string;
+  apiKey?: string;
+};
+
 export type GatewayChatCommandInput = {
   type: "chat.submit" | "chat.edit_resend";
   message: string;
@@ -142,6 +147,7 @@ export type GatewayChatCommandInput = {
   uploadedFiles?: PendingUploadedFile[];
   clientRequestId?: string;
   runtimeControls?: GatewayChatRuntimeControls;
+  apiOnlyProvider?: GatewayApiOnlyProviderSettings;
   baseMessageRef?: HistoryMessageRef;
   queuePolicy?: "auto" | "append" | "interrupt";
 };
@@ -1745,6 +1751,8 @@ export class GatewayWebSocketClient {
         body: JSON.stringify({
           message: params.input.message,
           model: params.input.selectedModel?.model,
+          baseUrl: params.input.apiOnlyProvider?.baseUrl,
+          apiKey: params.input.apiOnlyProvider?.apiKey,
         }),
       });
       const payload = await response.json().catch(() => ({}));

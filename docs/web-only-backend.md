@@ -12,8 +12,8 @@ It provides Vercel-compatible serverless endpoints at the repository root:
 
 Set these on the hosting platform:
 
-- `OPENAI_API_KEY` or `OPENAI_COMPATIBLE_API_KEY`: API key used by the backend endpoint.
-- `OPENAI_BASE_URL`: optional OpenAI-compatible base URL, defaults to `https://api.openai.com/v1`.
+- `OPENAI_API_KEY` or `OPENAI_COMPATIBLE_API_KEY`: API key used by the backend endpoint. The backend also accepts `OPENAI_KEY`, `LLM_API_KEY`, `VITE_OPENAI_API_KEY`, and `VITE_OPENAI_COMPATIBLE_API_KEY` for Vercel projects that already use those names.
+- `OPENAI_BASE_URL`: optional OpenAI-compatible base URL, defaults to `https://api.openai.com/v1`. The backend also accepts `OPENAI_COMPATIBLE_BASE_URL`, `LLM_BASE_URL`, `VITE_OPENAI_BASE_URL`, and `VITE_OPENAI_COMPATIBLE_BASE_URL`.
 - `OPENAI_MODEL`: optional default model, defaults to `gpt-4.1-mini`.
 
 For the bundled Vercel WebUI build, keep these front-end build flags enabled so the original UI does not attempt desktop/Gateway-only paths:
@@ -21,6 +21,8 @@ For the bundled Vercel WebUI build, keep these front-end build flags enabled so 
 - `VITE_DISABLE_GATEWAY_WEBSOCKET=1`
 - `VITE_DISABLE_MANAGED_PROCESS=1`
 - `VITE_DISABLE_MONACO=1`
+
+You can verify what the serverless function can see by opening `/api/status`; it returns `apiKeyConfigured`, `apiKeySource`, and `openaiBaseUrlSource` without exposing the secret.
 
 ## Example request
 

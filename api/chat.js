@@ -1,3 +1,5 @@
+const { resolveProviderApiKey, resolveProviderBaseUrl } = require("./providerEnv.js");
+
 function sendJson(response, statusCode, payload) {
   response.statusCode = statusCode;
   response.setHeader("content-type", "application/json; charset=utf-8");
@@ -35,20 +37,20 @@ module.exports = async function chat(request, response) {
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY || process.env.OPENAI_COMPATIBLE_API_KEY || "";
-  if (!apiKey.trim()) {
-    sendJson(response, 500, {
-      error: "missing_api_key",
-      message: "Set OPENAI_API_KEY or OPENAI_COMPATIBLE_API_KEY on the deployment.",
-    });
-    return;
-  }
-
   let body;
   try {
     body = await readJsonBody(request);
   } catch (_error) {
     sendJson(response, 400, { error: "invalid_json", message: "Request body must be JSON." });
+    return;
+  }
+
+  const apiKey = resolveProviderApiKey(body.apiKey);
+  if (!apiKey) {
+    sendJson(response, 500, {
+      error: "missing_api_key",
+      message: "Set OPENAI_API_KEY or OPENAI_COMPATIBLE_API_KEY on the deployment, or configure a provider API key in the WebUI.",
+    });
     return;
   }
 
@@ -58,7 +60,7 @@ module.exports = async function chat(request, response) {
     return;
   }
 
-  const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const baseUrl = resolveProviderBaseUrl(body.baseUrl).value.replace(/\/+$/, "");
   const model =
     typeof body.model === "string" && body.model.trim()
       ? body.model.trim()
@@ -67,7 +69,7 @@ module.exports = async function chat(request, response) {
   const upstreamResponse = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${apiKey}`,
+      authorization: `Bearer ${apiKey.value}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({

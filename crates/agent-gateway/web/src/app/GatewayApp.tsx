@@ -1938,6 +1938,12 @@ export default function GatewayApp() {
       uploadedFiles,
       clientRequestId,
       runtimeControls,
+      apiOnlyProvider: currentChatProvider
+        ? {
+            baseUrl: currentChatProvider.baseUrl,
+            apiKey: currentChatProvider.apiKey,
+          }
+        : undefined,
       baseMessageRef: options?.editMessageRef,
       queuePolicy: options?.queuePolicy ?? "auto",
     };
@@ -2101,6 +2107,12 @@ export default function GatewayApp() {
           systemSettings: buildGatewaySystemSettings(settings, workdirForTurn),
           uploadedFiles: materialized.uploadedFiles,
           clientRequestId: createUuid(),
+          apiOnlyProvider: currentChatProvider
+            ? {
+                baseUrl: currentChatProvider.baseUrl,
+                apiKey: currentChatProvider.apiKey,
+              }
+            : undefined,
           runtimeControls: chatRuntimeControlsForCurrentProvider,
           queuePolicy,
         });

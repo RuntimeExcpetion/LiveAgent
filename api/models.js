@@ -1,3 +1,5 @@
+const { resolveProviderApiKey, resolveProviderBaseUrl } = require("./providerEnv.js");
+
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 
 function sendJson(response, statusCode, payload) {
@@ -70,9 +72,7 @@ module.exports = async function models(request, response) {
     return;
   }
 
-  const apiKey = String(
-    body.apiKey || process.env.OPENAI_API_KEY || process.env.OPENAI_COMPATIBLE_API_KEY || "",
-  ).trim();
+  const apiKey = resolveProviderApiKey(body.apiKey);
   if (!apiKey) {
     sendJson(response, 500, {
       error: "missing_api_key",
@@ -81,13 +81,13 @@ module.exports = async function models(request, response) {
     return;
   }
 
-  const baseUrl = normalizeBaseUrl(body.baseUrl || process.env.OPENAI_BASE_URL || DEFAULT_BASE_URL);
+  const baseUrl = normalizeBaseUrl(resolveProviderBaseUrl(body.baseUrl, DEFAULT_BASE_URL).value);
   let upstream;
   try {
     upstream = await fetch(modelsUrl(baseUrl), {
       method: "GET",
       headers: {
-        authorization: `Bearer ${apiKey}`,
+        authorization: `Bearer ${apiKey.value}`,
         "content-type": "application/json",
       },
     });
