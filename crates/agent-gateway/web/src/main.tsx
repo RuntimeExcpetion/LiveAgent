@@ -12,11 +12,6 @@ import "./styles.css";
 document.documentElement.dataset.liveagentWebui = GATEWAY_WEBUI_MARKER;
 
 async function loadRoot() {
-  if (import.meta.env.VITE_WEB_ONLY_BACKEND === "1") {
-    const module = await import("./app/WebOnlyApp");
-    return module.default;
-  }
-
   const dashboardPaths = new Set(["/dashboard", "/status-board", "/observatory"]);
   if (dashboardPaths.has(window.location.pathname)) {
     const module = await import("./pages/StatusDashboardPage");

@@ -1,6 +1,6 @@
-# Web-only backend mode
+# API-only WebUI backend
 
-This mode is for deployments that do **not** use the LiveAgent Gateway ⇄ desktop Agent relay.
+This mode keeps the original LiveAgent WebUI and uses serverless API endpoints instead of the LiveAgent Gateway ⇄ desktop Agent relay.
 
 It provides Vercel-compatible serverless endpoints at the repository root:
 
@@ -15,8 +15,7 @@ Set these on the hosting platform:
 - `OPENAI_BASE_URL`: optional OpenAI-compatible base URL, defaults to `https://api.openai.com/v1`.
 - `OPENAI_MODEL`: optional default model, defaults to `gpt-4.1-mini`.
 
-For the bundled Vercel WebUI build, keep these front-end build flags enabled so the static UI does not attempt
-the Gateway/desktop relay paths:
+For the bundled Vercel WebUI build, keep these front-end build flags enabled so the original UI does not attempt desktop/Gateway-only paths:
 
 - `VITE_DISABLE_GATEWAY_WEBSOCKET=1`
 - `VITE_DISABLE_MANAGED_PROCESS=1`
@@ -33,12 +32,9 @@ curl -X POST https://your-app.vercel.app/api/chat \
 ## Important limitations
 
 This backend intentionally bypasses Gateway and desktop Agent communication. It does not provide local-file,
-terminal, tunnel, managed-process, or workspace-agent tools. Those capabilities require a real Agent runtime or a
-future server-side Agent implementation.
+terminal, tunnel, managed-process, or workspace-agent tools. Those capabilities require separate server-side API
+implementations.
 
-The existing full LiveAgent WebUI still contains Gateway-oriented flows. Use these endpoints as the backend surface for
-web-only integration, and keep `VITE_DISABLE_GATEWAY_WEBSOCKET=1`, `VITE_DISABLE_MANAGED_PROCESS=1`, and
-`VITE_DISABLE_MONACO=1` for hosted lightweight builds so the original UI remains available without constructing
-Gateway WebSocket connections.
-
-If you want the minimal standalone chat page instead of the original UI, opt in explicitly with `VITE_WEB_ONLY_BACKEND=1`.
+The original LiveAgent WebUI remains the default UI. Use `/api/chat` and `/api/status` as the backend surface, and keep
+`VITE_DISABLE_GATEWAY_WEBSOCKET=1`, `VITE_DISABLE_MANAGED_PROCESS=1`, and `VITE_DISABLE_MONACO=1` for hosted
+API-only builds so no browser WebSocket is constructed.

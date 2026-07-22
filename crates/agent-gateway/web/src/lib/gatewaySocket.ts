@@ -83,7 +83,23 @@ import type {
 const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
 function createGatewayWebSocketSkippedError() {
-  return new DOMException("Gateway relay skipped in web-only mode", "AbortError");
+  return new DOMException("This deployment uses API-only mode and does not open a WebSocket.", "AbortError");
+}
+
+function createApiOnlyStatus(): AgentStatus {
+  return {
+    online: true,
+    agent_ready: true,
+    chat_runtime_ready: true,
+    agent_id: "api-only",
+    agent_version: "api-only",
+    session_id: "api-only",
+    connected_since: Math.floor(Date.now() / 1000),
+    last_heartbeat: Math.floor(Date.now() / 1000),
+    runtime_state: "ready",
+    runtime_visible: true,
+    runtime_active_run_count: 0,
+  };
 }
 
 type StatusListener = (status: AgentStatus | null, error: string | null) => void;
@@ -1327,6 +1343,12 @@ export class GatewayWebSocketClient {
   }
 
   async getStatus(): Promise<AgentStatus> {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      const status = createApiOnlyStatus();
+      this.lastStatus = status;
+      this.lastStatusError = null;
+      return status;
+    }
     const status = await this.requestWithRecovery<AgentStatus>("status.get", {});
     this.lastStatus = status;
     this.lastStatusError = null;
@@ -1367,6 +1389,13 @@ export class GatewayWebSocketClient {
   }
 
   subscribeStatus(listener: StatusListener): () => void {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      const status = this.lastStatus ?? createApiOnlyStatus();
+      this.lastStatus = status;
+      this.lastStatusError = null;
+      listener(status, null);
+      return () => {};
+    }
     this.statusListeners.add(listener);
     if (this.lastStatus || this.lastStatusError) {
       listener(this.lastStatus, this.lastStatusError);
@@ -1777,6 +1806,10 @@ export class GatewayWebSocketClient {
   // same point conversation streams resume), `false` when the socket drops.
   // Late subscribers immediately receive the current state.
   subscribeConnection(listener: (connected: boolean) => void): () => void {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      listener(true);
+      return () => {};
+    }
     this.connectionListeners.add(listener);
     listener(this.connectionState);
     return () => {
