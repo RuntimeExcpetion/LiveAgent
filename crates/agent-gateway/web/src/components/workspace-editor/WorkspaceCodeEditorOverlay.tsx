@@ -118,7 +118,7 @@ const EDITOR_OVERLAY_ANIMATION_MS = 180;
 const EDITOR_CONTEXT_MENU_WIDTH = 220;
 const EDITOR_CONTEXT_MENU_HEIGHT = 340;
 
-type WorkspaceCodeEditorOverlayProps = {
+export type WorkspaceCodeEditorOverlayProps = {
   openRequest: WorkspaceCodeEditorOpenRequest | null;
   closeRequestId?: number;
   isOpen: boolean;

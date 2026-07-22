@@ -228,9 +228,9 @@ export default function GatewayApp() {
   // True only after an authenticated gateway connection has been established
   // and then dropped; the initial connect never shows lost-connection UI.
   const [gatewayConnectionLost, setGatewayConnectionLost] = useState(false);
-  // A cached Agent status is usable only after it has been observed on the
-  // currently authenticated browser-socket epoch.
-  const [sidebarAgentStatusFresh, setSidebarAgentStatusFresh] = useState(false);
+  // Sidebar availability tracks only the authenticated browser⇄gateway socket
+  // so the WebUI remains usable without a paired desktop Agent.
+  const [sidebarGatewayConnected, setSidebarGatewayConnected] = useState(false);
   const [conversationId, setConversationId] = useState("");
   // 本地未持久化的会话模型切换（按会话 id 键）；发消息随 selected_model
   // 落库后由 history-sync 回声在清理 effect 中收敛删除。
@@ -1257,7 +1257,7 @@ export default function GatewayApp() {
   useEffect(() => {
     if (!api) {
       setGatewayConnectionLost(false);
-      setSidebarAgentStatusFresh(false);
+      setSidebarGatewayConnected(false);
       return;
     }
 
@@ -1265,11 +1265,11 @@ export default function GatewayApp() {
     let freshnessState = INITIAL_GATEWAY_SIDEBAR_STATUS_FRESHNESS;
     const applyFreshnessEvent = (event: GatewaySidebarStatusFreshnessEvent) => {
       freshnessState = reduceGatewaySidebarStatusFreshness(freshnessState, event);
-      setSidebarAgentStatusFresh(freshnessState.agentStatusFresh);
+      setSidebarGatewayConnected(freshnessState.socketConnected);
     };
 
     setGatewayConnectionLost(false);
-    setSidebarAgentStatusFresh(false);
+    setSidebarGatewayConnected(false);
     // Subscribe to connection first so an immediately replayed cached status
     // is interpreted against the socket state that owns the current epoch.
     const unsubscribeConnection = api.subscribeConnection((connected) => {
@@ -1801,7 +1801,7 @@ export default function GatewayApp() {
   // socket's own wakeup/reconnect plus per-conversation subscription resume
   // replaces the old page-restore recovery machinery.
   useEffect(() => {
-    if (!api || historyShareToken || status?.online !== true) {
+    if (!api || historyShareToken || gatewayConnectionLost) {
       return;
     }
 
@@ -1832,10 +1832,10 @@ export default function GatewayApp() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       document.removeEventListener("resume", nudgeRuntime);
     };
-  }, [api, historyShareToken, prepareChatRuntime, status?.online]);
+  }, [api, gatewayConnectionLost, historyShareToken, prepareChatRuntime]);
 
   useEffect(() => {
-    if (!api || historyShareToken || status?.online !== true) {
+    if (!api || historyShareToken || gatewayConnectionLost) {
       return;
     }
 
@@ -1853,7 +1853,7 @@ export default function GatewayApp() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [api, historyShareToken, prepareChatRuntime, status?.online]);
+  }, [api, gatewayConnectionLost, historyShareToken, prepareChatRuntime]);
 
   // Lean submission flow: optimistic echo + chat.command through the pipeline.
   // Everything after run start flows through the persistent conversation
@@ -3009,22 +3009,21 @@ export default function GatewayApp() {
       setSharedHistoryListError(null);
       return;
     }
-    if (gatewayConnectionLost || status?.online !== true) {
+    if (gatewayConnectionLost) {
       return;
     }
-    // Force a new generation when the browser socket recovers or the desktop
-    // AgentSession identity changes. A request tied to the old generation may
-    // finish with `agent offline`; it must not poison the freshly loaded list.
+    // Force a new generation when the browser socket recovers. A request tied
+    // to the old generation may finish after reconnect; it must not poison the
+    // freshly loaded list.
     void refreshSharedHistoryItems(api, {
       force: true,
-      generation: status.session_id?.trim() || "online",
+      generation: status?.session_id?.trim() || "online",
     });
   }, [
     api,
     gatewayConnectionLost,
     refreshSharedHistoryItems,
     setSharedHistoryItemsState,
-    status?.online,
     status?.session_id,
   ]);
 
@@ -3634,7 +3633,7 @@ export default function GatewayApp() {
     settingsSyncReady,
     isAgentMode,
     webTerminalSessionsEnabled,
-    statusOnline: status?.online,
+    statusOnline: !gatewayConnectionLost,
     statusSessionId: status?.session_id,
     terminalProjectPath,
     terminalProjectPathKey,
@@ -3846,11 +3845,10 @@ export default function GatewayApp() {
   const composerCompactionBlocked = transcriptToolStatusIsCompaction;
   const sidebarSectionsDisabled = shouldDisableGatewaySidebarSections({
     connectionLost: gatewayConnectionLost,
-    agentStatusFresh: sidebarAgentStatusFresh,
-    agentOnline: status?.online,
+    socketConnected: sidebarGatewayConnected,
   });
   const composerInputDisabled =
-    !status?.online || historyDetailLoading || composerCompactionBlocked;
+    gatewayConnectionLost || historyDetailLoading || composerCompactionBlocked;
   const composerPlaceholder = composerCompactionBlocked
     ? translate("chat.compactingContextWait", settings.locale)
     : historyDetailLoading
@@ -3859,14 +3857,14 @@ export default function GatewayApp() {
         ? translate("chat.inputHintWithSkills", settings.locale)
         : translate("chat.inputHint", settings.locale);
   const canDropUpload =
-    status?.online === true &&
+    !gatewayConnectionLost &&
     isAgentMode &&
     Boolean(displayedConversationWorkdir.trim()) &&
     !isUploadingFiles &&
     !composerInputDisabled;
   const fileDropTitle = canDropUpload
     ? translate("chat.upload.dropReady", settings.locale)
-    : status?.online !== true
+    : gatewayConnectionLost
       ? translate("chat.upload.dropBusy", settings.locale)
       : !isAgentMode
         ? translate("chat.upload.onlyInTools", settings.locale)
