@@ -1648,6 +1648,9 @@ export class GatewayWebSocketClient {
     if (this.token.trim() === "") {
       throw new Error("Gateway token is required");
     }
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      throw createGatewayWebSocketSkippedError();
+    }
     // Build exactly once: the gateway deduplicates by client_request_id, so a
     // lost acknowledgement can be retried after reconnect without dispatching
     // a second desktop run. Rebuilding here could generate a different id for
