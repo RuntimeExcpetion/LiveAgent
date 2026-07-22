@@ -15,6 +15,13 @@ Set these on the hosting platform:
 - `OPENAI_BASE_URL`: optional OpenAI-compatible base URL, defaults to `https://api.openai.com/v1`.
 - `OPENAI_MODEL`: optional default model, defaults to `gpt-4.1-mini`.
 
+For the bundled Vercel WebUI build, keep these front-end build flags enabled so the static UI does not attempt
+the Gateway/desktop relay paths:
+
+- `VITE_DISABLE_GATEWAY_WEBSOCKET=1`
+- `VITE_DISABLE_MANAGED_PROCESS=1`
+- `VITE_DISABLE_MONACO=1`
+
 ## Example request
 
 ```bash
@@ -30,4 +37,5 @@ terminal, tunnel, managed-process, or workspace-agent tools. Those capabilities 
 future server-side Agent implementation.
 
 The existing full LiveAgent WebUI still contains Gateway-oriented flows. Use these endpoints as the backend surface for
-web-only integration, and keep `VITE_DISABLE_MANAGED_PROCESS=1` / `VITE_DISABLE_MONACO=1` for hosted lightweight builds.
+web-only integration, and keep `VITE_DISABLE_GATEWAY_WEBSOCKET=1`, `VITE_DISABLE_MANAGED_PROCESS=1`, and
+`VITE_DISABLE_MONACO=1` for hosted lightweight builds so the browser does not attempt `/ws/v2` Gateway connections.
