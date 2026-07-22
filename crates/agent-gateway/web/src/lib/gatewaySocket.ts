@@ -82,6 +82,10 @@ import type {
 
 const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
+function createGatewayWebSocketSkippedError() {
+  return new DOMException("Gateway relay skipped in web-only mode", "AbortError");
+}
+
 type StatusListener = (status: AgentStatus | null, error: string | null) => void;
 type HistoryListener = (event: GatewayHistoryEvent) => void;
 type SettingsListener = (event: GatewaySettingsSyncPayload) => void;
@@ -1607,7 +1611,7 @@ export class GatewayWebSocketClient {
       throw new Error("Gateway token is required");
     }
     if (GATEWAY_WEBSOCKET_DISABLED) {
-      throw new Error("Gateway WebSocket is disabled for this deployment");
+      throw createGatewayWebSocketSkippedError();
     }
     // Build exactly once: the gateway deduplicates by client_request_id, so a
     // lost acknowledgement can be retried after reconnect without dispatching
@@ -2792,7 +2796,7 @@ export class GatewayWebSocketClient {
       throw new Error("Gateway token is required");
     }
     if (GATEWAY_WEBSOCKET_DISABLED) {
-      throw new Error("Gateway WebSocket is disabled for this deployment");
+      throw createGatewayWebSocketSkippedError();
     }
     if (this.socket && this.authenticated && this.socket.readyState === WebSocket.OPEN) {
       if (this.shouldRecycleAuthenticatedSocket()) {

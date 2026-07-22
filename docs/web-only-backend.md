@@ -21,6 +21,7 @@ the Gateway/desktop relay paths:
 - `VITE_DISABLE_GATEWAY_WEBSOCKET=1`
 - `VITE_DISABLE_MANAGED_PROCESS=1`
 - `VITE_DISABLE_MONACO=1`
+- `VITE_WEB_ONLY_BACKEND=1`
 
 ## Example request
 
@@ -37,5 +38,6 @@ terminal, tunnel, managed-process, or workspace-agent tools. Those capabilities 
 future server-side Agent implementation.
 
 The existing full LiveAgent WebUI still contains Gateway-oriented flows. Use these endpoints as the backend surface for
-web-only integration, and keep `VITE_DISABLE_GATEWAY_WEBSOCKET=1`, `VITE_DISABLE_MANAGED_PROCESS=1`, and
-`VITE_DISABLE_MONACO=1` for hosted lightweight builds so the browser does not attempt `/ws/v2` Gateway connections.
+web-only integration, and keep `VITE_DISABLE_GATEWAY_WEBSOCKET=1`, `VITE_DISABLE_MANAGED_PROCESS=1`,
+`VITE_DISABLE_MONACO=1`, and `VITE_WEB_ONLY_BACKEND=1` for hosted lightweight builds so the browser loads the
+standalone web-only app instead of the Gateway WebSocket UI.
