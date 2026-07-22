@@ -31,7 +31,7 @@ RELEASE_TAG ?=
 
 .PHONY: all dev build desktop-build-macos desktop-build-macos-release desktop-build-macos-intel desktop-build-macos-m desktop-build-windows desktop-build-linux github-release-main check-github-release-tag help
 .PHONY: dev-gateway dev-webui
-.PHONY: proto proto-check webui gateway-build gateway-docker-build gateway-docker-run gateway-docker-smoke build-linux build-linux-amd build-linux-arm
+.PHONY: proto proto-check webui gateway-build gateway-docker-build gateway-docker-run gateway-docker-smoke gateway-docker-webui-test build-linux build-linux-amd build-linux-arm
 .PHONY: clean check-rust-target-% check-macos-signing-identity check-macos-notary-profile desktop-store-macos-notary-profile desktop-wait-macos-notary desktop-staple-macos desktop-verify-macos
 
 all: build gateway-build
@@ -135,6 +135,9 @@ gateway-build: proto webui
 gateway-docker-build:
 	docker build -t $(GATEWAY_DOCKER_IMAGE) .
 
+gateway-docker-webui-test:
+	docker build --target webui-test -t $(GATEWAY_DOCKER_IMAGE)-webui-test .
+
 gateway-docker-run:
 	docker run --rm -p 8080:8080 -e LIVEAGENT_GATEWAY_TOKEN=$(DEV_GATEWAY_TOKEN) $(GATEWAY_DOCKER_IMAGE)
 
@@ -234,6 +237,7 @@ help:
 	@printf "  %-34s %s\n" "make webui" "构建 agent-gateway Web UI"
 	@printf "  %-34s %s\n" "make gateway-build" "构建 agent-gateway 本地二进制"
 	@printf "  %-34s %s\n" "make gateway-docker-build" "构建 agent-gateway Docker 镜像"
+	@printf "  %-34s %s\n" "make gateway-docker-webui-test" "在 Docker 中运行 gateway Web UI 测试"
 	@printf "  %-34s %s\n" "make gateway-docker-run" "本地运行 agent-gateway Docker 镜像"
 	@printf "  %-34s %s\n" "make gateway-docker-smoke" "构建并健康检查 agent-gateway Docker 镜像"
 	@printf "  %-34s %s\n" "make build-linux" "构建 agent-gateway Linux amd64 二进制"
