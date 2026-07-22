@@ -165,6 +165,19 @@ export class ConversationStreamClient {
     registration.handlers.onEvent(event);
   }
 
+  emitLocalEvent(event: ConversationStreamEvent): void {
+    const conversationId = readEventConversationId(event);
+    if (!conversationId) {
+      return;
+    }
+    const registration = this.registrations.get(conversationId);
+    if (!registration || registration.disposed) {
+      return;
+    }
+    registration.synced = true;
+    this.deliver(registration, event);
+  }
+
   // App-requested resync (e.g. transcript divergence): re-issue
   // chat.subscribe from the cursor, exactly like gap recovery. No-op when
   // the conversation is not subscribed or the socket is down (reconnect

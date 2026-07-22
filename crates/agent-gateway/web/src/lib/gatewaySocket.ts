@@ -1607,6 +1607,9 @@ export class GatewayWebSocketClient {
   // Submit a chat command. Streaming does not hang off the command: the
   // conversation subscription (persistent, run-agnostic) carries the reply.
   async chatCommand(input: GatewayChatCommandInput): Promise<ChatCommandAccepted> {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      return this.chatCommandViaWebOnlyBackend(input);
+    }
     if (this.token.trim() === "") {
       throw new Error("Gateway token is required");
     }
@@ -1662,6 +1665,89 @@ export class GatewayWebSocketClient {
           ? response.accepted_seq
           : 0,
     };
+  }
+
+  private async chatCommandViaWebOnlyBackend(
+    input: GatewayChatCommandInput,
+  ): Promise<ChatCommandAccepted> {
+    const conversationId = input.conversationId?.trim() || `web-only-${createUuid()}`;
+    const runId = `web-only-run-${createUuid()}`;
+    const clientRequestId = input.clientRequestId?.trim() || createUuid();
+
+    window.setTimeout(() => {
+      void this.runWebOnlyChat({ conversationId, runId, clientRequestId, input });
+    }, 0);
+
+    return {
+      runId,
+      conversationId,
+      acceptedSeq: 0,
+    };
+  }
+
+  private async runWebOnlyChat(params: {
+    conversationId: string;
+    runId: string;
+    clientRequestId: string;
+    input: GatewayChatCommandInput;
+  }) {
+    let seq = 1;
+    const emit = (event: Parameters<ConversationStreamClient["emitLocalEvent"]>[0]) => {
+      this.conversationStreams.emitLocalEvent({
+        ...event,
+        conversation_id: params.conversationId,
+        run_id: params.runId,
+        seq: seq++,
+      });
+    };
+
+    emit({
+      type: "run_started",
+      conversation_id: params.conversationId,
+      run_id: params.runId,
+      seq: 0,
+      client_request_id: params.clientRequestId,
+    });
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: params.input.message,
+          model: params.input.selectedModel?.model,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || `chat failed: ${response.status}`);
+      }
+      const text = String(payload?.message ?? "").trim();
+      if (text) {
+        emit({ type: "token", text, conversation_id: params.conversationId });
+      }
+      emit({ type: "done", conversation_id: params.conversationId });
+      emit({
+        type: "run_finished",
+        conversation_id: params.conversationId,
+        run_id: params.runId,
+        seq: 0,
+        status: "completed",
+        client_request_id: params.clientRequestId,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim() ? error.message.trim() : "chat failed";
+      emit({
+        type: "run_finished",
+        conversation_id: params.conversationId,
+        run_id: params.runId,
+        seq: 0,
+        status: "failed",
+        message,
+        client_request_id: params.clientRequestId,
+      });
+    }
   }
 
   // Persistent per-conversation stream subscription with built-in resume.
