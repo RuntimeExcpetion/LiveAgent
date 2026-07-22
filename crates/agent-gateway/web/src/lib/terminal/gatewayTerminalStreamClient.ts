@@ -1,3 +1,4 @@
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import type { TerminalWireHeader } from "@/lib/gatewaySocketV2/adapters";
 import {
   decodeTerminalServerFrame,
@@ -20,6 +21,11 @@ const INPUT_RETRY_MS = 25;
 const INPUT_HIGH_WATER_BYTES = 256 * 1024;
 const INPUT_LOW_WATER_BYTES = 128 * 1024;
 const ATTACH_RETRY_MS = 250;
+const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
+
+function createGatewayWebSocketSkippedError() {
+  return new DOMException("", "AbortError");
+}
 
 // 帧头形状沿用旧自定义帧的命名；v2 下由适配层映射到 TerminalStreamFrame。
 type TerminalFrameHeader = TerminalWireHeader;
@@ -33,13 +39,16 @@ type PendingAttach = {
 };
 
 function terminalStreamUrl() {
-  const origin = terminalRuntimeOrigin();
+  if (GATEWAY_WEBSOCKET_DISABLED) {
+    throw createGatewayWebSocketSkippedError();
+  }
+  const origin = getGatewayWebSocketOrigin() || terminalRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway terminal stream origin is unavailable");
   }
   // v2 终端数据面唯一端点（旧 /ws/terminal 与 /ws?terminal=1 回退已淘汰）。
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
   url.pathname = "/ws/v2/terminal";
   url.search = "";
   url.hash = "";

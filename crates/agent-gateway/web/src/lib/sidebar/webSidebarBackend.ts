@@ -17,7 +17,6 @@
 import type { ActivityStore } from "@/lib/chat/stream/activityStore";
 import { formatConversationTitle } from "@/lib/chatUi";
 import type {
-  AgentStatus,
   ConversationSummary,
   GatewayHistoryEvent,
   HistoryList,
@@ -111,20 +110,6 @@ function scopeToHistoryListFilter(scope: SidebarScope): HistoryListFilter | null
   }
 }
 
-function agentConnectionIdentity(status: AgentStatus | null) {
-  if (status?.online !== true) {
-    return "";
-  }
-  const sessionId = status.session_id?.trim() ?? "";
-  if (sessionId) {
-    return `session:${sessionId}`;
-  }
-  const connectedSince = status.connected_since;
-  return typeof connectedSince === "number" && Number.isFinite(connectedSince)
-    ? `connected:${connectedSince}`
-    : "";
-}
-
 type WebSidebarApi = {
   listHistory(page: number, pageSize: number, filter?: HistoryListFilter): Promise<HistoryList>;
   listHistoryWorkdirs(): Promise<HistoryWorkdirsResponse>;
@@ -133,7 +118,6 @@ type WebSidebarApi = {
   deleteHistory(conversationId: string): Promise<void>;
   subscribeHistory(listener: (event: GatewayHistoryEvent) => void): () => void;
   subscribeConnection(listener: (connected: boolean) => void): () => void;
-  subscribeStatus(listener: (status: AgentStatus | null, error: string | null) => void): () => void;
 };
 
 export type WebSidebarBackendDeps = {
@@ -239,76 +223,20 @@ export function createWebSidebarBackend(deps: WebSidebarBackendDeps): SidebarBac
     },
 
     subscribeConnection(listener) {
-      // For the sidebar, "connected" means the whole read path works: the
-      // browser⇄gateway socket is authenticated AND the desktop agent behind
-      // it is online. The agent can drop and return while the socket never
-      // blips (and after a gateway restart the socket recovers before the
-      // agent has re-registered), so folding agent online-ness in here makes
-      // the store's reconnect refetch fire the moment reads can actually
-      // succeed — clearing any stale listError immediately instead of on the
-      // next reconcile tick. Both sources replay their current state to late
-      // subscribers; dedup keeps the store's disconnect latch edge-triggered.
-      // Agent status is scoped to the socket epoch that delivered it. Keeping
-      // an old `online=true` across browser-socket reconnect would announce
-      // readiness as soon as auth succeeds, before the new socket's replayed
-      // status arrives. Gateway deliberately sends auth response first and
-      // status.event second, so freshness is an explicit part of the state.
-      let socketConnected = false;
-      let agentStatusFresh = false;
-      let agentOnline = false;
-      let agentIdentity = "";
+      // The WebUI sidebar follows the authenticated browser⇄gateway socket.
+      // It must remain usable even when no desktop Agent is paired; individual
+      // mutations still surface server-side capability errors as needed.
       let lastEmitted: boolean | null = null;
-      const emit = () => {
-        const next = socketConnected && agentStatusFresh && agentOnline;
+      const unsubscribeConnection = api.subscribeConnection((connected) => {
+        const next = connected === true;
         if (next === lastEmitted) {
           return;
         }
         lastEmitted = next;
         listener(next);
-      };
-      const unsubscribeConnection = api.subscribeConnection((connected) => {
-        socketConnected = connected === true;
-        // A status snapshot from the previous socket cannot establish that
-        // the freshly authenticated read path is ready.
-        agentStatusFresh = false;
-        agentOnline = false;
-        emit();
-      });
-      const unsubscribeStatus = api.subscribeStatus((status) => {
-        const nextOnline = status?.online === true;
-        const nextIdentity = agentConnectionIdentity(status);
-        const sessionReplaced =
-          socketConnected &&
-          agentStatusFresh &&
-          agentOnline &&
-          nextOnline &&
-          agentIdentity !== "" &&
-          nextIdentity !== "" &&
-          agentIdentity !== nextIdentity;
-
-        agentStatusFresh = socketConnected;
-        agentOnline = nextOnline;
-        if (nextOnline) {
-          if (nextIdentity) {
-            agentIdentity = nextIdentity;
-          }
-        } else {
-          agentIdentity = "";
-        }
-
-        // Replacing the desktop AgentSession is an online→online transition,
-        // but it closes every pending unary stream from the previous session.
-        // Synthesize a reconnect edge so the sidebar invalidates that failed
-        // generation and re-fetches against the new session.
-        if (sessionReplaced && lastEmitted === true) {
-          lastEmitted = false;
-          listener(false);
-        }
-        emit();
       });
       return () => {
         unsubscribeConnection();
-        unsubscribeStatus();
       };
     },
 

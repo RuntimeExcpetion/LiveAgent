@@ -27,6 +27,8 @@ import { loadWebSettings, persistWebSettings, type WebSettingsSaveState } from "
 import { asErrorMessage } from "../chatEventUtils";
 import { hasSettingsSyncChanged, resolveAppWorkspaceProjects } from "../historyUtils";
 
+const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
+
 export function useGatewaySettingsSync(params: {
   token: string;
   api: GatewayWebSocketClientLike | null;
@@ -86,7 +88,7 @@ export function useGatewaySettingsSync(params: {
       setSettingsSaveState({ status: "saving" });
       const redactedNext = redactSettingsForWebStorage(next);
       const gatewayUpdate =
-        syncGateway && api
+        syncGateway && api && !GATEWAY_WEBSOCKET_DISABLED
           ? buildGatewaySettingsSyncUpdatePayload(prev, next, {
               includeProviderApiKeyUpdates: true,
             })
@@ -178,6 +180,11 @@ export function useGatewaySettingsSync(params: {
   useEffect(() => {
     if (!api) {
       setSettingsSyncReady(token.trim() === "");
+      setSettingsSyncError(null);
+      return;
+    }
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      setSettingsSyncReady(true);
       setSettingsSyncError(null);
       return;
     }

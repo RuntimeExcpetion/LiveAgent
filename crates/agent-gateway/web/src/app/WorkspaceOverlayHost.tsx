@@ -1,23 +1,40 @@
 import { lazy, Suspense } from "react";
 
-import type { WorkspaceCodeEditorOpenRequest } from "@/components/workspace-editor/WorkspaceCodeEditorOverlay";
+import type {
+  WorkspaceCodeEditorOpenRequest,
+  WorkspaceCodeEditorOverlayProps,
+} from "@/components/workspace-editor/WorkspaceCodeEditorOverlay";
 import type { WorkspaceFilePreviewOpenRequest } from "@/components/workspace-editor/WorkspaceFilePreviewOverlay";
 import type { WorkspaceSshTerminalOpenRequest } from "@/components/workspace-editor/WorkspaceSshTerminalOverlay";
 import { t as translate } from "@/i18n";
 import type { CodeMentionReference } from "@/lib/chat/mentionReferences";
-import { lockMonacoNlsLocale, preparePreferredMonacoNlsLocale } from "@/lib/monacoNls";
 import type { AppSettings, EffectiveTheme } from "@/lib/settings";
 import type { SftpClient } from "@/lib/sftp/types";
 import type { TerminalClient, TerminalSession } from "@/lib/terminal/types";
 
-const WorkspaceCodeEditorOverlay = lazy(async () => {
-  await preparePreferredMonacoNlsLocale();
-  const module = await import("@/components/workspace-editor/WorkspaceCodeEditorOverlay");
-  lockMonacoNlsLocale();
-  return {
-    default: module.WorkspaceCodeEditorOverlay,
-  };
-});
+function DisabledWorkspaceCodeEditorOverlay(_props: WorkspaceCodeEditorOverlayProps) {
+  return (
+    <div className="workspace-code-editor-overlay absolute inset-0 z-40 flex items-center justify-center border-r border-border bg-background px-6 text-center text-sm text-muted-foreground shadow-2xl">
+      Workspace editor is disabled in this deployment.
+    </div>
+  );
+}
+
+const WorkspaceCodeEditorOverlay =
+  import.meta.env.VITE_DISABLE_MONACO === "1"
+    ? lazy(async () => ({ default: DisabledWorkspaceCodeEditorOverlay }))
+    : lazy(async () => {
+        const [{ lockMonacoNlsLocale, preparePreferredMonacoNlsLocale }, module] =
+          await Promise.all([
+            import("@/lib/monacoNls"),
+            import("@/components/workspace-editor/WorkspaceCodeEditorOverlay"),
+          ]);
+        await preparePreferredMonacoNlsLocale();
+        lockMonacoNlsLocale();
+        return {
+          default: module.WorkspaceCodeEditorOverlay,
+        };
+      });
 
 const WorkspaceFilePreviewOverlay = lazy(async () => {
   const module = await import("@/components/workspace-editor/WorkspaceFilePreviewOverlay");
