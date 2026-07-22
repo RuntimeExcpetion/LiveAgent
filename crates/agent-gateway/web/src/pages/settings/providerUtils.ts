@@ -13,6 +13,7 @@ const GATEWAY_TOKEN_STORAGE_KEY = "liveagent.gateway.token";
 const CODEX_MODELS_SUFFIXES = ["/chat/completions", "/responses", "/response"];
 const GEMINI_GENERATE_SUFFIXES = [":streamGenerateContent", ":generateContent"];
 const ANTHROPIC_API_VERSION = "2023-06-01";
+const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
 // Gateway WebUI 判定移至 lib/runtimeEnv 单一真源；此处再导出保持既有调用方不变。
 export { isGatewayWebuiRuntime };
@@ -191,6 +192,23 @@ async function readFetchError(response: Response, fallback: string) {
   }
 }
 
+async function fetchModelsThroughApiOnlyBackend(
+  type: ProviderId,
+  baseUrl: string,
+  apiKey: string,
+): Promise<ProviderModelConfig[]> {
+  const response = await fetch("/api/models", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type, baseUrl, apiKey }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || `Failed to fetch model list: ${response.status}`);
+  }
+  return normalizeFetchedModels(payload?.models ?? payload?.data ?? [], type);
+}
+
 async function fetchModelsThroughGateway(
   type: ProviderId,
   baseUrl: string,
@@ -342,6 +360,9 @@ export async function fetchModelsFromApi(
   const normalizedUrl = normalizeModelBaseUrl(type, baseUrl);
   const normalizedApiKey = apiKey.trim();
   if (isGatewayWebuiRuntime()) {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      return fetchModelsThroughApiOnlyBackend(type, normalizedUrl, normalizedApiKey);
+    }
     return fetchModelsThroughGateway(
       type,
       normalizedUrl,

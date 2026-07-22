@@ -22,7 +22,9 @@ import type {
   SftpTransferResponse,
 } from "@/lib/sftp/types";
 import { createUuid } from "@/lib/shared/id";
+import { getGatewayWebSocketOrigin } from "@/lib/gatewayBaseUrl";
 import { BrowserGatewayTerminalStreamClient } from "@/lib/terminal/gatewayTerminalStreamClient";
+
 import type {
   SshTerminalTab,
   SshTerminalTabKind,
@@ -78,6 +80,64 @@ import type {
   RunningConversationSummary,
 } from "./gatewayTypes";
 
+const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
+
+function createGatewayWebSocketSkippedError() {
+  return new DOMException("", "AbortError");
+}
+
+function createApiOnlyStatus(): AgentStatus {
+  return {
+    online: true,
+    agent_ready: true,
+    chat_runtime_ready: true,
+    agent_id: "api-only",
+    agent_version: "api-only",
+    session_id: "api-only",
+    connected_since: Math.floor(Date.now() / 1000),
+    last_heartbeat: Math.floor(Date.now() / 1000),
+    runtime_state: "ready",
+    runtime_visible: true,
+    runtime_active_run_count: 0,
+  };
+}
+
+async function* readWebOnlySseEvents(response: Response): AsyncGenerator<{ event: string; data: unknown }> {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() || "";
+    for (const part of parts) {
+      let event = "message";
+      let data = "";
+      for (const line of part.split(/\r?\n/)) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (!data) continue;
+      try {
+        yield { event, data: JSON.parse(data) };
+      } catch {
+        yield { event, data };
+      }
+    }
+  }
+}
+
+function readSseText(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (data && typeof data === "object" && "text" in data) {
+    return String((data as { text?: unknown }).text ?? "");
+  }
+  return "";
+}
+
 type StatusListener = (status: AgentStatus | null, error: string | null) => void;
 type HistoryListener = (event: GatewayHistoryEvent) => void;
 type SettingsListener = (event: GatewaySettingsSyncPayload) => void;
@@ -108,6 +168,11 @@ type GatewayChatSystemSettings = {
   selectedSystemTools?: string[];
 };
 
+type GatewayApiOnlyProviderSettings = {
+  baseUrl?: string;
+  apiKey?: string;
+};
+
 export type GatewayChatCommandInput = {
   type: "chat.submit" | "chat.edit_resend";
   message: string;
@@ -118,6 +183,7 @@ export type GatewayChatCommandInput = {
   uploadedFiles?: PendingUploadedFile[];
   clientRequestId?: string;
   runtimeControls?: GatewayChatRuntimeControls;
+  apiOnlyProvider?: GatewayApiOnlyProviderSettings;
   baseMessageRef?: HistoryMessageRef;
   queuePolicy?: "auto" | "append" | "interrupt";
 };
@@ -541,12 +607,12 @@ function asErrorMessage(error: unknown, fallback: string) {
 }
 
 function buildWebSocketUrl() {
-  const origin = getRuntimeOrigin();
+  const origin = getGatewayWebSocketOrigin() || getRuntimeOrigin();
   if (!origin) {
     throw new Error("Gateway WebSocket origin is unavailable");
   }
   const url = new URL(origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
   // v2 统一线协议端点（WebSocket + Protobuf 二进制帧）。
   url.pathname = "/ws/v2";
   url.search = "";
@@ -1319,6 +1385,12 @@ export class GatewayWebSocketClient {
   }
 
   async getStatus(): Promise<AgentStatus> {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      const status = createApiOnlyStatus();
+      this.lastStatus = status;
+      this.lastStatusError = null;
+      return status;
+    }
     const status = await this.requestWithRecovery<AgentStatus>("status.get", {});
     this.lastStatus = status;
     this.lastStatusError = null;
@@ -1359,6 +1431,13 @@ export class GatewayWebSocketClient {
   }
 
   subscribeStatus(listener: StatusListener): () => void {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      const status = this.lastStatus ?? createApiOnlyStatus();
+      this.lastStatus = status;
+      this.lastStatusError = null;
+      listener(status, null);
+      return () => {};
+    }
     this.statusListeners.add(listener);
     if (this.lastStatus || this.lastStatusError) {
       listener(this.lastStatus, this.lastStatusError);
@@ -1599,6 +1678,9 @@ export class GatewayWebSocketClient {
   // Submit a chat command. Streaming does not hang off the command: the
   // conversation subscription (persistent, run-agnostic) carries the reply.
   async chatCommand(input: GatewayChatCommandInput): Promise<ChatCommandAccepted> {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      return this.chatCommandViaWebOnlyBackend(input);
+    }
     if (this.token.trim() === "") {
       throw new Error("Gateway token is required");
     }
@@ -1653,6 +1735,106 @@ export class GatewayWebSocketClient {
     };
   }
 
+  private async chatCommandViaWebOnlyBackend(
+    input: GatewayChatCommandInput,
+  ): Promise<ChatCommandAccepted> {
+    const conversationId = input.conversationId?.trim() || `web-only-${createUuid()}`;
+    const runId = `web-only-run-${createUuid()}`;
+    const clientRequestId = input.clientRequestId?.trim() || createUuid();
+
+    window.setTimeout(() => {
+      void this.runWebOnlyChat({ conversationId, runId, clientRequestId, input });
+    }, 0);
+
+    return {
+      runId,
+      conversationId,
+      acceptedSeq: 0,
+    };
+  }
+
+  private async runWebOnlyChat(params: {
+    conversationId: string;
+    runId: string;
+    clientRequestId: string;
+    input: GatewayChatCommandInput;
+  }) {
+    let seq = 1;
+    const emit = (event: Parameters<ConversationStreamClient["emitLocalEvent"]>[0]) => {
+      this.conversationStreams.emitLocalEvent({
+        ...event,
+        conversation_id: params.conversationId,
+        run_id: params.runId,
+        seq: seq++,
+      });
+    };
+
+    emit({
+      type: "run_started",
+      conversation_id: params.conversationId,
+      run_id: params.runId,
+      seq: 0,
+      client_request_id: params.clientRequestId,
+    });
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message: params.input.message,
+          model: params.input.selectedModel?.model,
+          baseUrl: params.input.apiOnlyProvider?.baseUrl,
+          apiKey: params.input.apiOnlyProvider?.apiKey,
+          stream: true,
+        }),
+      });
+      const contentType = response.headers.get("content-type") || "";
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.message || `chat failed: ${response.status}`);
+      }
+      if (contentType.includes("text/event-stream")) {
+        for await (const item of readWebOnlySseEvents(response)) {
+          if (item.event === "thinking") {
+            const text = readSseText(item.data);
+            if (text) emit({ type: "thinking", text, conversation_id: params.conversationId });
+          } else if (item.event === "token") {
+            const text = readSseText(item.data);
+            if (text) emit({ type: "token", text, conversation_id: params.conversationId });
+          }
+        }
+      } else {
+        const payload = await response.json().catch(() => ({}));
+        const text = String(payload?.message ?? "").trim();
+        if (text) {
+          emit({ type: "token", text, conversation_id: params.conversationId });
+        }
+      }
+      emit({ type: "done", conversation_id: params.conversationId });
+      emit({
+        type: "run_finished",
+        conversation_id: params.conversationId,
+        run_id: params.runId,
+        seq: 0,
+        status: "completed",
+        client_request_id: params.clientRequestId,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim() ? error.message.trim() : "chat failed";
+      emit({
+        type: "run_finished",
+        conversation_id: params.conversationId,
+        run_id: params.runId,
+        seq: 0,
+        status: "failed",
+        message,
+        client_request_id: params.clientRequestId,
+      });
+    }
+  }
+
   // Persistent per-conversation stream subscription with built-in resume.
   subscribeConversationStream(
     conversationId: string,
@@ -1680,6 +1862,10 @@ export class GatewayWebSocketClient {
   // same point conversation streams resume), `false` when the socket drops.
   // Late subscribers immediately receive the current state.
   subscribeConnection(listener: (connected: boolean) => void): () => void {
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      listener(true);
+      return () => {};
+    }
     this.connectionListeners.add(listener);
     listener(this.connectionState);
     return () => {
@@ -2514,6 +2700,7 @@ export class GatewayWebSocketClient {
 
   private shouldMaintainConnection() {
     return (
+      !GATEWAY_WEBSOCKET_DISABLED &&
       !this.disposed &&
       this.token.trim() !== "" &&
       (this.pending.size > 0 ||
@@ -2782,6 +2969,9 @@ export class GatewayWebSocketClient {
     }
     if (this.token.trim() === "") {
       throw new Error("Gateway token is required");
+    }
+    if (GATEWAY_WEBSOCKET_DISABLED) {
+      throw createGatewayWebSocketSkippedError();
     }
     if (this.socket && this.authenticated && this.socket.readyState === WebSocket.OPEN) {
       if (this.shouldRecycleAuthenticatedSocket()) {
