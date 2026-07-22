@@ -83,7 +83,7 @@ import type {
 const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
 function createGatewayWebSocketSkippedError() {
-  return new DOMException("This deployment uses API-only mode and does not open a WebSocket.", "AbortError");
+  return new DOMException("", "AbortError");
 }
 
 function createApiOnlyStatus(): AgentStatus {

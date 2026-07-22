@@ -24,7 +24,7 @@ const ATTACH_RETRY_MS = 250;
 const GATEWAY_WEBSOCKET_DISABLED = import.meta.env?.VITE_DISABLE_GATEWAY_WEBSOCKET === "1";
 
 function createGatewayWebSocketSkippedError() {
-  return new DOMException("This deployment uses API-only mode and does not open a WebSocket", "AbortError");
+  return new DOMException("", "AbortError");
 }
 
 // 帧头形状沿用旧自定义帧的命名；v2 下由适配层映射到 TerminalStreamFrame。

@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const chat = require("../api/chat.js");
 const status = require("../api/status.js");
+const models = require("../api/models.js");
 
 class MockRequest extends EventEmitter {
   constructor({ method = "GET", body = "" } = {}) {
@@ -98,5 +99,40 @@ test("web-only chat forwards to an OpenAI-compatible chat completion endpoint", 
     else process.env.OPENAI_BASE_URL = originalBaseUrl;
     if (originalModel === undefined) delete process.env.OPENAI_MODEL;
     else process.env.OPENAI_MODEL = originalModel;
+  }
+});
+
+
+test("web-only models proxies OpenAI-compatible model lists", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.OPENAI_API_KEY;
+  const originalBaseUrl = process.env.OPENAI_BASE_URL;
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.OPENAI_BASE_URL = "https://llm.example/v1/";
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return new Response(
+      JSON.stringify({
+        data: [{ id: "gpt-test" }, { id: "gpt-test" }, { id: "gpt-next" }],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const response = new MockResponse();
+    await models(new MockRequest({ method: "POST", body: JSON.stringify({}) }), response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(captured.url, "https://llm.example/v1/models");
+    assert.equal(captured.init.headers.authorization, "Bearer test-key");
+    assert.deepEqual(response.json().models, [{ id: "gpt-test" }, { id: "gpt-next" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = originalApiKey;
+    if (originalBaseUrl === undefined) delete process.env.OPENAI_BASE_URL;
+    else process.env.OPENAI_BASE_URL = originalBaseUrl;
   }
 });

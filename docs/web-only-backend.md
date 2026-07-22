@@ -6,6 +6,7 @@ It provides Vercel-compatible serverless endpoints at the repository root:
 
 - `GET /api/status` returns a lightweight web-only health payload.
 - `POST /api/chat` forwards a non-streaming chat completion request to an OpenAI-compatible API.
+- `POST /api/models` fetches model IDs through the backend so the original settings UI can refresh models without Gateway.
 
 ## Required environment variables
 
@@ -35,6 +36,6 @@ This backend intentionally bypasses Gateway and desktop Agent communication. It 
 terminal, tunnel, managed-process, or workspace-agent tools. Those capabilities require separate server-side API
 implementations.
 
-The original LiveAgent WebUI remains the default UI. Use `/api/chat` and `/api/status` as the backend surface, and keep
+The original LiveAgent WebUI remains the default UI. Use `/api/chat`, `/api/models`, and `/api/status` as the backend surface, and keep
 `VITE_DISABLE_GATEWAY_WEBSOCKET=1`, `VITE_DISABLE_MANAGED_PROCESS=1`, and `VITE_DISABLE_MONACO=1` for hosted
 API-only builds so no browser WebSocket is constructed.
